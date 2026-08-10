@@ -84,7 +84,7 @@ async def generate_tts(text, voice, rate="+0%", volume="+0%", pitch="+0%"):
     
     # Save SRT file
     with open(sub_file, "w", encoding="utf-8") as f:
-        f.write(submaker.generate_srt())
+        f.write(submaker.get_srt())
     
     return Path(output_file), Path(sub_file)
 
@@ -150,3 +150,4 @@ def change_tempo(input_path, tempo):
         capture_output=True
     )
     return output_path
+    
