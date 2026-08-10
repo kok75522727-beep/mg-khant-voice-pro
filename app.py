@@ -376,7 +376,7 @@ def tts_page():
                         "📄 SRT စာတန်းထိုး",
                         data=st.session_state.last_srt.read_bytes(),
                         file_name="mgkhant_subtitle.srt",
-                        mime="text/plain",
+                        mime="application/x-subrip",
                         use_container_width=True
                     )
 
