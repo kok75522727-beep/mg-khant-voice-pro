@@ -41,6 +41,17 @@ EFFECTS = {
 USAGE_FILE = Path("usage_stats.json")
 
 
+def write_fallback_srt(text, output_path, duration_seconds=30):
+    """Write a valid single-cue SRT when the provider returns no timestamps."""
+    clean_text = " ".join(str(text).split())
+    srt = (
+        "1\n"
+        "00:00:00,000 --> 00:00:{:02d},000\n"
+        "{}\n"
+    ).format(duration_seconds, clean_text)
+    Path(output_path).write_text(srt, encoding="utf-8")
+
+
 def increment_usage():
     stats = {"count": 0}
     if USAGE_FILE.exists():
@@ -78,7 +89,11 @@ async def generate_edge_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz")
             elif chunk["type"] == "WordBoundary":
                 submaker.feed(chunk)
 
-    sub_file.write_text(submaker.get_srt(), encoding="utf-8")
+    srt_text = submaker.get_srt().strip()
+    if srt_text:
+        sub_file.write_text(srt_text + "\n", encoding="utf-8")
+    else:
+        write_fallback_srt(text, sub_file)
     return output_file, sub_file
 
 
@@ -119,8 +134,9 @@ def generate_azure_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
     output_file = Path("output.mp3")
     sub_file = Path("output.srt")
     output_file.write_bytes(response.content)
-    # REST synthesis does not return Edge-style WordBoundary events here.
-    sub_file.write_text("", encoding="utf-8")
+    # REST synthesis does not return Edge-style WordBoundary events here,
+    # so create a valid fallback subtitle cue for download.
+    write_fallback_srt(text, sub_file)
     return output_file, sub_file
 
 
@@ -189,3 +205,4 @@ __all__ = [
     "run_tts_to_file",
     "apply_effects",
 ]
+
