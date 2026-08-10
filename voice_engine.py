@@ -10,6 +10,11 @@ from pathlib import Path
 import edge_tts
 import requests
 
+try:
+    from mutagen.mp3 import MP3
+except ImportError:
+    MP3 = None
+
 # ---------------------------------------------------------------------------
 # Voice list: first two are the existing Myanmar Edge voices; the next eight
 # are Azure multilingual voices. The names shown in the UI are labels only.
@@ -75,20 +80,30 @@ def _srt_time(seconds):
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 
-def write_segmented_srt(text, output_path):
-    """Write one short subtitle cue per sentence/line for CapCut import."""
+def get_audio_duration(audio_path):
+    """Return the exact MP3 duration when mutagen is installed."""
+    if MP3 is None:
+        return None
+    try:
+        return float(MP3(str(audio_path)).info.length)
+    except Exception:
+        return None
+
+
+def write_segmented_srt(text, output_path, duration_seconds=None):
+    """Write 15-character cues spanning exactly the audio duration."""
     segments = split_subtitle_segments(text)
-    current = 0.0
+    if not segments:
+        segments = ["အသံဖိုင်"]
+    total_duration = float(duration_seconds or (len(segments) * 1.6))
+    cue_duration = total_duration / len(segments)
     cues = []
     for index, segment in enumerate(segments, 1):
-        # Keep each 15-character cue separate for clean CapCut cuts.
-        duration = 1.6
-        start = current
-        end = current + duration
+        start = (index - 1) * cue_duration
+        end = total_duration if index == len(segments) else index * cue_duration
         cues.append(
             f"{index}\n{_srt_time(start)} --> {_srt_time(end)}\n{segment}\n"
         )
-        current = end
     Path(output_path).write_text("\n".join(cues), encoding="utf-8")
 
 
@@ -134,8 +149,8 @@ async def generate_edge_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz")
             elif chunk["type"] == "WordBoundary":
                 submaker.feed(chunk)
 
-    # Use sentence-based cues so the same SRT imports cleanly into CapCut.
-    write_segmented_srt(text, sub_file)
+    # Use the real MP3 duration so the final SRT timestamp matches the audio.
+    write_segmented_srt(text, sub_file, get_audio_duration(output_file))
     return output_file, sub_file
 
 
@@ -178,7 +193,7 @@ def generate_azure_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
     output_file.write_bytes(response.content)
     # REST synthesis does not return Edge-style WordBoundary events here,
     # so create a valid fallback subtitle cue for download.
-    write_fallback_srt(text, sub_file)
+    write_segmented_srt(text, sub_file, get_audio_duration(output_file))
     return output_file, sub_file
 
 
