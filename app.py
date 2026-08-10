@@ -159,6 +159,49 @@ def inject_custom_css():
         flex-shrink: 0;
     }
 
+    /* Voice cards: compact square choices in a horizontal row */
+    div[role="radiogroup"] {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        gap: 8px !important;
+        overflow-x: auto !important;
+        padding: 8px 2px 12px 2px !important;
+        scrollbar-width: thin;
+    }
+
+    div[role="radiogroup"] > label {
+        min-width: 104px !important;
+        height: 88px !important;
+        padding: 10px 8px !important;
+        border: 1px solid rgba(129, 140, 248, 0.35) !important;
+        border-radius: 14px !important;
+        background: linear-gradient(145deg, rgba(99, 102, 241, 0.22), rgba(30, 41, 59, 0.82)) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+        transition: all 0.2s ease !important;
+    }
+
+    div[role="radiogroup"] > label:hover {
+        transform: translateY(-2px);
+        border-color: #a5b4fc !important;
+        box-shadow: 0 6px 16px rgba(99, 102, 241, 0.25);
+    }
+
+    div[role="radiogroup"] > label:has(input:checked) {
+        border: 2px solid #f472b6 !important;
+        background: linear-gradient(145deg, #6366f1, #db2777) !important;
+        box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.18), 0 8px 20px rgba(99, 102, 241, 0.35);
+    }
+
+    div[role="radiogroup"] > label p {
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        line-height: 1.25 !important;
+    }
+
     /* Audio player styling */
     audio {
         width: 100%;
@@ -200,10 +243,10 @@ def tts_page():
     st.markdown("""
     <div class="telegram-banner">
         <div style="font-size: 16px; font-weight: 600; color: #f0f9ff; margin-bottom: 2px;">
-            📢 Mg Khant အသံပြောင်းစနစ် Pro
+            📢 အားလုံးပဲ မင်္ဂလာပါ — Mg Khant AI မှ ကြိုဆိုပါတယ်
         </div>
         <div style="font-size: 13px; color: #e0f2fe; margin-bottom: 6px;">
-            အသံအသစ်များနှင့် အပ်ဒိတ်များအတွက် Telegram Group သို့ ဝင်ရောက်ပါ။
+            အသံသွင်းရတာ အဆင်မပြေတာရှိရင် Group မှာ လာရောက်မေးမြန်းနိုင်ပါတယ်။
         </div>
         <a href="https://t.me/fruitworld23" target="_blank">🔗 Telegram Group သို့ ဝင်မည်</a>
     </div>
@@ -215,34 +258,39 @@ def tts_page():
         render_section("1", "စာသားထည့်သွင်းရန် (မြန်မာ / အင်္ဂလိပ်)")
         text = st.text_area(
             "စာသားထည့်ရန်",
-            value="မင်္ဂလာပါ၊ ဒီစနစ်က နေ သင့်စာသားကို အသံအမျိုးမျိုးနဲ့ ဖတ်ပေးပါတယ်။",
-            height=120,
+            value="",
+            height=140,
             label_visibility="collapsed",
             placeholder="ဒီမှာ စာသားရိုက်ထည့်ပါ..."
         )
         
         render_section("2", "အသံအမျိုးအစား ရွေးချယ်ခြင်း")
-        voice_options = [f"{name} — {label}" for _, _, name, label in FEATURED_VOICES]
-        selected_voice_str = st.selectbox(
+        voice_options = [name for _, _, name, label in FEATURED_VOICES[:10]]
+        selected_voice_str = st.radio(
             "အသံရွေးပါ",
             options=voice_options,
+            index=0,
+            horizontal=True,
             label_visibility="collapsed"
         )
         selected_idx = voice_options.index(selected_voice_str)
-        voice_id, pitch_offset, name, label = FEATURED_VOICES[selected_idx]
+        voice_id, pitch_offset, name, label = FEATURED_VOICES[:10][selected_idx]
 
         col_speed, col_pitch = st.columns(2)
         with col_speed:
             render_section("3", "အလျင် (Speed)")
-            speed = st.slider(
+            speed_level = st.slider(
                 "အသံအလျင်",
-                min_value=0.5,
-                max_value=2.0,
-                value=1.0,
-                step=0.1,
-                format="%.1fx",
+                min_value=1,
+                max_value=100,
+                value=50,
+                step=1,
+                format="%d",
                 label_visibility="collapsed"
             )
+            # Map the user-friendly 1–100 control to the engine's 0.5x–2.0x range.
+            speed = 0.5 + (speed_level - 1) * 1.5 / 99
+            st.caption(f"Speed: {speed_level}/100 • {speed:.2f}x")
         with col_pitch:
             render_section("4", "အသံအမြင့် (Pitch)")
             pitch_value = st.slider(
@@ -256,20 +304,22 @@ def tts_page():
             )
 
         st.markdown("<div style='margin-top: 16px;'></div>", unsafe_allow_html=True)
-        run_btn = st.button("🎧 အသံဖန်တီးမည် (Generate Audio)", use_container_width=True)
+        action_col1, action_col2 = st.columns(2)
+        with action_col1:
+            test_btn = st.button("🔊 အသံစမ်းမည် (Test)", use_container_width=True)
+        with action_col2:
+            run_btn = st.button("🎧 အသံဖန်တီးမည် (Generate Audio)", use_container_width=True)
 
-    if run_btn:
-        if not text.strip():
-            st.warning("⚠️ ကျေးဇူးပြု၍ စာသားအနည်းဆုံး တစ်ခုခုထည့်ပါ။")
-        else:
-            with st.spinner("⏳ အသံဖိုင် ဖန်တီးနေပါသည်... ခဏစောင့်ပါ။"):
+    if run_btn or test_btn:
+        action_text = text.strip() if text.strip() else "အားလုံးပဲ မင်္ဂလာပါ။ Mg Khant AI မှ ကြိုဆိုပါတယ်။"
+        with st.spinner("⏳ အသံဖိုင် ဖန်တီးနေပါသည်... ခဏစောင့်ပါ။"):
                 try:
                     pitch_str = f"{pitch_value:+d}%" if pitch_value != 0 else "+0%"
                     rate_percent = (speed - 1) * 100
                     rate_str = f"{rate_percent:+.0f}%"
                     
                     audio_path, srt_path = run_tts_to_file(
-                        text, 
+                        action_text,
                         voice_id, 
                         pitch_offset,
                         rate=rate_str,
