@@ -15,7 +15,7 @@ from voice_engine import (
 # Page config & Custom CSS
 # ---------------------------------------------------------------------------
 
-ADMIN_PASSWORD = "saingmyanmar2026"
+ADMIN_PASSWORD = "Khant@6789"
 
 st.set_page_config(
     page_title="Mg Khant အသံပြောင်းစနစ် Pro",
@@ -24,196 +24,146 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for Modern Dark Theme UI
+# Custom CSS for Clean, Polished Mobile & Desktop UI without clipping
 def inject_custom_css():
     custom_css = """
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Pyidaungsu:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
     :root {
         --primary-color: #6366f1;
-        --primary-dark: #4f46e5;
         --secondary-color: #ec4899;
         --accent-color: #06b6d4;
         --bg-dark: #0f172a;
-        --bg-darker: #020617;
-        --text-light: #e2e8f0;
-        --border-color: #1e293b;
+        --text-light: #f8fafc;
+        --text-muted: #94a3b8;
+        --border-color: rgba(255, 255, 255, 0.1);
     }
-    
-    /* Main background */
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', 'Pyidaungsu', sans-serif;
+    }
+
+    /* Main background gradient */
     [data-testid="stAppViewContainer"] {
-        background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+        background: radial-gradient(circle at top right, #1e1b4b 0%, #0f172a 50%, #020617 100%);
         color: var(--text-light);
     }
-    
+
     /* Sidebar styling */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1e1b4b 0%, #0f172a 100%);
         border-right: 1px solid var(--border-color);
     }
-    
-    /* Section headers with numbers */
-    .section-header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin: 24px 0 16px 0;
-        padding: 16px;
-        background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(236, 72, 153, 0.1) 100%);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        border-left: 4px solid var(--primary-color);
-    }
-    
-    .section-number {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 40px;
-        height: 40px;
-        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-        border-radius: 50%;
-        color: white;
-        font-weight: bold;
-        font-size: 18px;
-        border: 2px solid rgba(255, 255, 255, 0.2);
-    }
-    
-    .section-title {
-        font-size: 20px;
-        font-weight: 600;
-        color: var(--text-light);
-        margin: 0;
-    }
-    
-    /* Buttons */
+
+    /* Buttons styling */
     .stButton > button {
         background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
         color: white;
         border: none;
-        border-radius: 8px;
+        border-radius: 12px;
         padding: 12px 24px;
         font-weight: 600;
         font-size: 16px;
         transition: all 0.3s ease;
         box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
     }
-    
+
     .stButton > button:hover {
         transform: translateY(-2px);
         box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
     }
-    
-    /* Text inputs */
-    .stTextArea > label,
-    .stTextInput > label {
-        color: var(--text-light);
-        font-weight: 500;
-    }
-    
-    .stTextArea textarea,
-    .stTextInput input {
-        background-color: rgba(30, 41, 59, 0.8) !important;
-        color: var(--text-light) !important;
-        border: 1px solid var(--border-color) !important;
-        border-radius: 8px !important;
-    }
-    
-    .stTextArea textarea:focus,
-    .stTextInput input:focus {
-        border-color: var(--primary-color) !important;
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
-    }
-    
-    /* Select boxes */
-    .stSelectbox > label,
-    .stSelectbox > div > div {
-        color: var(--text-light);
-    }
-    
-    /* Sliders */
-    .stSlider > label {
-        color: var(--text-light);
-        font-weight: 500;
-    }
-    
-    /* Audio player */
-    audio {
-        width: 100%;
-        border-radius: 8px;
-        margin: 16px 0;
-    }
-    
-    /* Success/Error messages */
-    .stSuccess {
-        background-color: rgba(34, 197, 94, 0.15) !important;
-        border: 1px solid rgba(34, 197, 94, 0.3) !important;
-        color: #86efac !important;
-        border-radius: 8px !important;
-    }
-    
-    .stError {
-        background-color: rgba(239, 68, 68, 0.15) !important;
-        border: 1px solid rgba(239, 68, 68, 0.3) !important;
-        color: #fca5a5 !important;
-        border-radius: 8px !important;
-    }
-    
-    .stWarning {
-        background-color: rgba(251, 146, 60, 0.15) !important;
-        border: 1px solid rgba(251, 146, 60, 0.3) !important;
-        color: #fed7aa !important;
-        border-radius: 8px !important;
-    }
-    
-    /* Metric styling */
-    .stMetric {
-        background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(236, 72, 153, 0.1) 100%);
-        padding: 16px;
-        border-radius: 12px;
-        border: 1px solid var(--border-color);
-    }
-    
-    /* Divider */
-    hr {
-        border-color: var(--border-color) !important;
-    }
-    
-    /* Telegram group banner */
-    .telegram-banner {
-        background: linear-gradient(135deg, #0088cc 0%, #0066aa 100%);
-        padding: 16px;
-        border-radius: 12px;
-        text-align: center;
-        margin-bottom: 24px;
-        border: 1px solid rgba(0, 136, 204, 0.3);
-        box-shadow: 0 4px 15px rgba(0, 136, 204, 0.2);
-    }
-    
-    .telegram-banner a {
-        color: white;
-        text-decoration: none;
-        font-weight: 600;
-        font-size: 16px;
-    }
-    
-    .telegram-banner a:hover {
-        text-decoration: underline;
-    }
-    
-    /* Download button */
+
     .stDownloadButton > button {
-        background: linear-gradient(135deg, var(--accent-color) 0%, #06b6d4 100%) !important;
+        background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important;
         color: white !important;
         border: none !important;
-        border-radius: 8px !important;
+        border-radius: 12px !important;
         padding: 12px 24px !important;
         font-weight: 600 !important;
-        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3) !important;
     }
-    
-    .stDownloadButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 20px rgba(6, 182, 212, 0.4) !important;
+
+    /* Text areas and inputs */
+    .stTextArea textarea, .stTextInput input {
+        background-color: rgba(15, 23, 42, 0.7) !important;
+        color: var(--text-light) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        border-radius: 12px !important;
+        padding: 12px !important;
+        font-size: 15px !important;
+    }
+
+    .stTextArea textarea:focus, .stTextInput input:focus {
+        border-color: var(--primary-color) !important;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2) !important;
+    }
+
+    /* Metric cards */
+    [data-testid="stMetric"] {
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(236, 72, 153, 0.1) 100%);
+        padding: 20px;
+        border-radius: 16px;
+        border: 1px solid var(--border-color);
+    }
+
+    /* Telegram banner */
+    .telegram-banner {
+        background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+        padding: 16px 20px;
+        border-radius: 16px;
+        text-align: center;
+        margin-bottom: 20px;
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        box-shadow: 0 4px 15px rgba(2, 132, 199, 0.2);
+    }
+
+    .telegram-banner a {
+        color: #ffffff;
+        text-decoration: none;
+        font-weight: 700;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 6px 16px;
+        border-radius: 20px;
+        display: inline-block;
+        margin-top: 8px;
+        transition: background 0.2s;
+    }
+
+    .telegram-banner a:hover {
+        background: rgba(255, 255, 255, 0.35);
+    }
+
+    /* Clean section header without clipping box */
+    .clean-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 20px 0 10px 0;
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--text-light);
+    }
+
+    .header-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+        border-radius: 50%;
+        font-size: 13px;
+        font-weight: bold;
+        flex-shrink: 0;
+    }
+
+    /* Audio player styling */
+    audio {
+        width: 100%;
+        border-radius: 12px;
+        margin: 10px 0;
     }
     </style>
     """
@@ -226,98 +176,95 @@ inject_custom_css()
 # ---------------------------------------------------------------------------
 
 def b64_audio(path):
-    """Return base64-encoded audio data for the HTML audio player."""
     data = path.read_bytes()
     b64 = base64.b64encode(data).decode()
-    mime = "audio/mpeg"
-    return f'data:{mime};base64,{b64}'
+    return f'data:audio/mpeg;base64,{b64}'
 
 def audio_player(path):
     st.audio(b64_audio(path), format="audio/mp3")
 
-def render_section_header(number, title):
-    """Render a numbered section header."""
+def render_section(num, title):
     st.markdown(f"""
-    <div class="section-header">
-        <div class="section-number">{number}</div>
-        <div class="section-title">{title}</div>
+    <div class="clean-header">
+        <div class="header-badge">{num}</div>
+        <span>{title}</span>
     </div>
     """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# TTS page
+# TTS Page (Main)
 # ---------------------------------------------------------------------------
 
 def tts_page():
-    # Telegram Group Banner
+    # Telegram Banner
     st.markdown("""
     <div class="telegram-banner">
-        <span style="font-size: 18px; margin-right: 12px;">📱</span>
-        <strong>Group Join :</strong> အသံပြောင်းစနစ် အဆင်သင့်ဖြစ်ရန် Mg Khant Group မှ ကြည့်ရှုပါ။
-        <br>
-        <a href="https://t.me/fruitworld23" target="_blank">🔗 Mg Khant Group ကို ကြည့်ရှုပါ</a>
+        <div style="font-size: 16px; font-weight: 600; color: #f0f9ff; margin-bottom: 2px;">
+            📢 Mg Khant အသံပြောင်းစနစ် Pro
+        </div>
+        <div style="font-size: 13px; color: #e0f2fe; margin-bottom: 6px;">
+            အသံအသစ်များနှင့် အပ်ဒိတ်များအတွက် Telegram Group သို့ ဝင်ရောက်ပါ။
+        </div>
+        <a href="https://t.me/fruitworld23" target="_blank">🔗 Telegram Group သို့ ဝင်မည်</a>
     </div>
     """, unsafe_allow_html=True)
-    
-    render_section_header("2", "စာသားထည့်သွင်းခြင်း")
-    
-    text = st.text_area(
-        "စာသားထည့်ပါ (မြန်မာ / အင်္ဂလိပ်)",
-        value="မင်္ဂလာပါ၊ ဒီစနစ်က နေ သင့်စာသားကို အသံအမျိုးမျိုးနဲ့ ဖတ်ပေးပါတယ်။",
-        height=120,
-        label_visibility="collapsed"
-    )
-    
-    render_section_header("3", "အသံရွေးချယ်ခြင်း (Voice)")
-    
-    # Voice selection
-    voice_options = [f"{name} - {label}" for _, _, name, label in FEATURED_VOICES]
-    selected_voice_str = st.selectbox(
-        "အသံရွေးပါ",
-        options=voice_options,
-        label_visibility="collapsed"
-    )
-    
-    # Get selected voice index
-    selected_idx = voice_options.index(selected_voice_str)
-    voice_id, pitch_offset, name, label = FEATURED_VOICES[selected_idx]
-    
-    render_section_header("4", "အလျင်အမြန် (Speed)")
-    speed = st.slider(
-        "အသံအလျင်",
-        min_value=0.5,
-        max_value=2.0,
-        value=1.0,
-        step=0.1,
-        format="%.1fx",
-        label_visibility="collapsed"
-    )
-    
-    render_section_header("5", "အသံအမြင့်အနိမ့် (Pitch)")
-    pitch_value = st.slider(
-        "Pitch ပြင်ဆင်မှု",
-        min_value=-50,
-        max_value=50,
-        value=0,
-        step=5,
-        format="%d%%",
-        label_visibility="collapsed"
-    )
-    
-    render_section_header("6", "✨ အသံထုတ်ရန်")
-    
-    run_btn = st.button("🎧 အသံထုတ်ရန်", type="primary", use_container_width=True)
-    
+
+    with st.container(border=True):
+        st.markdown("### 🎙️ အသံဖန်တီးခြင်း (Text to Speech)")
+        
+        render_section("1", "စာသားထည့်သွင်းရန် (မြန်မာ / အင်္ဂလိပ်)")
+        text = st.text_area(
+            "စာသားထည့်ရန်",
+            value="မင်္ဂလာပါ၊ ဒီစနစ်က နေ သင့်စာသားကို အသံအမျိုးမျိုးနဲ့ ဖတ်ပေးပါတယ်။",
+            height=120,
+            label_visibility="collapsed",
+            placeholder="ဒီမှာ စာသားရိုက်ထည့်ပါ..."
+        )
+        
+        render_section("2", "အသံအမျိုးအစား ရွေးချယ်ခြင်း")
+        voice_options = [f"{name} — {label}" for _, _, name, label in FEATURED_VOICES]
+        selected_voice_str = st.selectbox(
+            "အသံရွေးပါ",
+            options=voice_options,
+            label_visibility="collapsed"
+        )
+        selected_idx = voice_options.index(selected_voice_str)
+        voice_id, pitch_offset, name, label = FEATURED_VOICES[selected_idx]
+
+        col_speed, col_pitch = st.columns(2)
+        with col_speed:
+            render_section("3", "အလျင် (Speed)")
+            speed = st.slider(
+                "အသံအလျင်",
+                min_value=0.5,
+                max_value=2.0,
+                value=1.0,
+                step=0.1,
+                format="%.1fx",
+                label_visibility="collapsed"
+            )
+        with col_pitch:
+            render_section("4", "အသံအမြင့် (Pitch)")
+            pitch_value = st.slider(
+                "Pitch",
+                min_value=-50,
+                max_value=50,
+                value=0,
+                step=5,
+                format="%d%%",
+                label_visibility="collapsed"
+            )
+
+        st.markdown("<div style='margin-top: 16px;'></div>", unsafe_allow_html=True)
+        run_btn = st.button("🎧 အသံဖန်တီးမည် (Generate Audio)", use_container_width=True)
+
     if run_btn:
         if not text.strip():
-            st.warning("⚠️ စာသားထည့်ပါ။")
+            st.warning("⚠️ ကျေးဇူးပြု၍ စာသားအနည်းဆုံး တစ်ခုခုထည့်ပါ။")
         else:
-            with st.spinner("⏳ အသံ generate လုပ်နေပါသည်..."):
+            with st.spinner("⏳ အသံဖိုင် ဖန်တီးနေပါသည်... ခဏစောင့်ပါ။"):
                 try:
-                    # Convert pitch_value to pitch format
                     pitch_str = f"{pitch_value:+d}%" if pitch_value != 0 else "+0%"
-                    
-                    # Calculate rate from speed
                     rate_percent = (speed - 1) * 100
                     rate_str = f"{rate_percent:+.0f}%"
                     
@@ -334,173 +281,170 @@ def tts_page():
                     
                     st.session_state.last_audio = audio_path
                     st.session_state.last_srt = srt_path
-                    st.success("✅ အသံဖန်တီးပြီးပါပြီ။")
+                    st.success("✅ အသံဖိုင် အောင်မြင်စွာ ဖန်တီးပြီးပါပြီ။")
                 except Exception as e:
-                    st.error(f"❌ အောင်မြင်စွာ မဖန်တီးနိုင်ပါ: {str(e)}")
-    
+                    st.error(f"❌ အမှားအယွင်း ဖြစ်ပေါ်သည်: {str(e)}")
+
     if "last_audio" in st.session_state:
-        st.markdown("---")
-        render_section_header("7", "အသံထုတ်ယူမှု အောင်မြင်ပြီး ✅")
-        
-        audio_player(st.session_state.last_audio)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button(
-                "⬇️ အသံ (MP3) ထုတ်ယူရန်",
-                data=st.session_state.last_audio.read_bytes(),
-                file_name="voice_output.mp3",
-                mime="audio/mpeg",
-                use_container_width=True
-            )
-        
-        with col2:
-            if "last_srt" in st.session_state and st.session_state.last_srt.exists():
+        with st.container(border=True):
+            st.markdown("### 🎧 ရလဒ်နှင့် အသံထုတ်ယူမှု")
+            audio_player(st.session_state.last_audio)
+            
+            st.markdown("<div style='height: 5px;'></div>", unsafe_allow_html=True)
+            dl_col1, dl_col2 = st.columns(2)
+            with dl_col1:
                 st.download_button(
-                    "📄 SRT ထုတ်ယူရန်",
-                    data=st.session_state.last_srt.read_bytes(),
-                    file_name="voice_output.srt",
-                    mime="text/plain",
+                    "⬇️ MP3 ဒေါင်းလုဒ်",
+                    data=st.session_state.last_audio.read_bytes(),
+                    file_name="mgkhant_voice.mp3",
+                    mime="audio/mpeg",
                     use_container_width=True
                 )
+            with dl_col2:
+                if "last_srt" in st.session_state and st.session_state.last_srt.exists():
+                    st.download_button(
+                        "📄 SRT စာတန်းထိုး",
+                        data=st.session_state.last_srt.read_bytes(),
+                        file_name="mgkhant_subtitle.srt",
+                        mime="text/plain",
+                        use_container_width=True
+                    )
 
 # ---------------------------------------------------------------------------
-# Voice effects page
+# Effects Page
 # ---------------------------------------------------------------------------
 
 def effects_page():
-    render_section_header("2", "အသံဖိုင် Effect ပြောင်းခြင်း")
-    
-    st.markdown("Audio ဖိုင် upload လုပ်ပြီး voice effect ရွေးပါ။")
-    
-    uploaded = st.file_uploader(
-        "Audio ဖိုင်တင်ပါ (mp3 / wav)",
-        type=["mp3", "wav", "ogg", "m4a"],
-        key="audio_uploader",
-    )
-    
-    if uploaded is not None:
-        st.session_state.uploaded_name = uploaded.name
-        st.session_state.uploaded_data = uploaded.read()
-    
-    if "uploaded_data" in st.session_state and st.session_state.uploaded_data:
-        audio_data = st.session_state.uploaded_data
-        input_path = Path(f"/tmp/upload_{st.session_state.uploaded_name}")
-        with open(input_path, "wb") as f:
-            f.write(audio_data)
+    with st.container(border=True):
+        st.markdown("### 🎚️ အသံဖိုင် Effect ပြောင်းလဲခြင်း")
+        st.markdown("သင်၏ မူရင်းအသံဖိုင် (MP3, WAV, OGG, M4A) ကို တင်ပြီး Effect အမျိုးမျိုး ထည့်သွင်းနိုင်ပါသည်။")
         
-        render_section_header("3", "မူရင်းအသံ")
-        st.audio(audio_data, format="audio/mp3")
+        uploaded = st.file_uploader(
+            "Audio ဖိုင်တင်ရန်",
+            type=["mp3", "wav", "ogg", "m4a"],
+            key="audio_uploader",
+        )
         
-        col1, col2 = st.columns(2)
-        with col1:
-            effect = st.selectbox("Effect ရွေးပါ", list(EFFECTS.keys()), label_visibility="collapsed")
-        with col2:
-            extra_tempo = st.slider("Extra Speed", 0.5, 2.0, 1.0, 0.05)
+        if uploaded is not None:
+            st.session_state.uploaded_name = uploaded.name
+            st.session_state.uploaded_data = uploaded.read()
         
-        render_section_header("4", "🎛️ Effect ပြောင်းရန်")
-        
-        convert_clicked = st.button("🎛️ Effect ပြောင်းရန်", type="primary", use_container_width=True)
-        
-        if convert_clicked:
-            with st.spinner("⏳ Effect ပြောင်းနေပါသည်..."):
-                try:
-                    out_path = apply_effects(input_path, effect, tempo=extra_tempo)
-                    st.session_state.effect_audio = out_path
-                    st.session_state.effect_name = effect
-                    st.success("✅ Effect ပြောင်းပြီးပါပြီ။")
-                except Exception as e:
-                    st.error(f"❌ ပြောင်းနိုင်ခြင်း မရှိပါ: {str(e)}")
-        
-        if "effect_audio" in st.session_state:
-            st.markdown("---")
-            render_section_header("5", f"ရလဒ် - {st.session_state.effect_name}")
+        if "uploaded_data" in st.session_state and st.session_state.uploaded_data:
+            audio_data = st.session_state.uploaded_data
+            input_path = Path(f"/tmp/upload_{st.session_state.uploaded_name}")
+            with open(input_path, "wb") as f:
+                f.write(audio_data)
             
-            audio_player(st.session_state.effect_audio)
-            st.download_button(
-                "⬇️ အသံဖိုင် Download လုပ်ရန်",
-                data=st.session_state.effect_audio.read_bytes(),
-                file_name="voice_effect_output.mp3",
-                mime="audio/mpeg",
-                use_container_width=True
-            )
+            st.markdown("#### 🎵 မူရင်းအသံဖိုင်")
+            audio_player(input_path)
+            
+            col_eff1, col_eff2 = st.columns(2)
+            with col_eff1:
+                effect = st.selectbox("Effect အမျိုးအစား ရွေးပါ", list(EFFECTS.keys()))
+            with col_eff2:
+                extra_tempo = st.slider("အမြန်နှုန်း ညှိရန်", 0.5, 2.0, 1.0, 0.05)
+            
+            convert_clicked = st.button("✨ Effect စတင်ပြောင်းမည်", type="primary", use_container_width=True)
+            
+            if convert_clicked:
+                with st.spinner("⏳ Effect ထည့်သွင်းနေပါသည်..."):
+                    try:
+                        out_path = apply_effects(input_path, effect, tempo=extra_tempo)
+                        st.session_state.effect_audio = out_path
+                        st.session_state.effect_name = effect
+                        st.success("✅ Effect ပြောင်းလဲခြင်း ပြီးစီးပါပြီ။")
+                    except Exception as e:
+                        st.error(f"❌ Error: {str(e)}")
+            
+            if "effect_audio" in st.session_state:
+                st.markdown("---")
+                st.markdown(f"#### 🎧 ရလဒ် ({st.session_state.effect_name})")
+                audio_player(st.session_state.effect_audio)
+                st.download_button(
+                    "⬇️ Effect ပါအသံ ဒေါင်းလုဒ်ရန်",
+                    data=st.session_state.effect_audio.read_bytes(),
+                    file_name=f"effect_{st.session_state.effect_name}.mp3",
+                    mime="audio/mpeg",
+                    use_container_width=True
+                )
 
 # ---------------------------------------------------------------------------
 # Admin Page
 # ---------------------------------------------------------------------------
 
 def admin_page():
-    render_section_header("🔐", "Admin Dashboard")
-    
-    pwd = st.text_input("Admin Password ကိုထည့်ပါ", type="password", label_visibility="collapsed")
-    
-    if pwd == ADMIN_PASSWORD:
-        st.success("✅ Welcome, Admin!")
-        st.markdown("---")
+    with st.container(border=True):
+        st.markdown("### 🔐 Admin Dashboard")
+        pwd = st.text_input("Admin Password ထည့်ပါ", type="password", placeholder="Password ရိုက်ထည့်ပါ...")
         
-        count = get_usage_count()
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.metric("စုစုပေါင်း အသံထုတ်ယူမှု", f"{count} ကြိမ်")
-        
-        with col2:
-            if st.button("🔄 Usage Count ကို Reset လုပ်ရန်", use_container_width=True):
-                with open("usage_stats.json", "w") as f:
-                    json.dump({"count": 0}, f)
-                st.rerun()
-    elif pwd:
-        st.error("❌ Password မှားနေပါသည်။")
+        if pwd == ADMIN_PASSWORD:
+            st.success("✅ Admin အဖြစ် အောင်မြင်စွာ ဝင်ရောက်ပြီးပါပြီ။")
+            st.markdown("---")
+            
+            count = get_usage_count()
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("စုစုပေါင်း အသံထုတ်ယူမှု ကြိမ်ရေ", f"{count} ကြိမ်")
+            with col2:
+                if st.button("🔄 Usage Count ကို 0 သို့ ပြန်ထားမည်", use_container_width=True):
+                    with open("usage_stats.json", "w") as f:
+                        json.dump({"count": 0}, f)
+                    st.rerun()
+        elif pwd:
+            st.error("❌ Password မှားယွင်းနေပါသည်။")
 
 # ---------------------------------------------------------------------------
-# About page
+# About Page
 # ---------------------------------------------------------------------------
 
 def about_page():
-    render_section_header("ℹ️", "App အကြောင်း")
-    
-    st.markdown(f"""
-    ### 🎙️ Mg Khant အသံပြောင်းစနစ် Pro
-    
-    ဒီ app ကို အသံပေါင်း ၁၀ မျိုးနဲ့ အသုံးပြုရလွယ်ကူအောင် ပြင်ဆင်ထားပါတယ်။
-    
-    **✨ အဓိက အင်္ဂါရပ်များ**
-    - 🎙️ အသံ ၁၀ မျိုး (Celebrity voices)
-    - ⚡ အလျင်အမြန် ပြင်ဆင်နိုင်
-    - 🎚️ အသံ Effect ၉ မျိုး
-    - 📄 SRT Subtitle ထုတ်ယူနိုင်
-    - 🎯 Admin Dashboard နဲ့ Usage Tracking
-    
-    **🛠️ Technology Stack**
-    - **Python** — ပင်မ programming language
-    - **Streamlit** — web app framework
-    - **edge-tts** — Microsoft Neural Voices Engine
-    - **ffmpeg** — Audio processing engine
-    
-    **👨‍💻 Developed with ❤️**
-    
-    ---
-    
-    📱 **Group Link**: [Mg Khant Group](https://t.me/fruitworld23)
-    """)
+    with st.container(border=True):
+        st.markdown("""
+        ### ℹ️ App အကြောင်းအရာ
+        
+        **Mg Khant အသံပြောင်းစနစ် Pro** သည် အဆင့်မြင့် Neural Voice Engine များကို အသုံးပြု၍ မြန်မာနှင့် အင်္ဂလိပ်စာသားများကို သဘာဝကျကျ အသံထွက်ဖန်တီးပေးသော Web Application ဖြစ်ပါသည်။
+        
+        #### ✨ အဓိက အင်္ဂါရပ်များ
+        - 🎙️ **အသံ ၁၀ မျိုး** (Celebrity & Neural Voices)
+        - ⚡ **Speed & Pitch Control** (အသံအလျင်နှင့် အမြင့် အလွယ်တူညှိရန်)
+        - 🎚️ **Professional Audio Effects** (အသံအမျိုးမျိုး ပြောင်းလဲနိုင်ခြင်း)
+        - 📄 **SRT Subtitle Export** (ဗီဒီယိုအတွက် စာတန်းထိုးဖိုင် ထုတ်ယူနိုင်ခြင်း)
+        - 📊 **Admin Dashboard** (အသုံးပြုမှု စာရင်းများ ကြည့်ရှုနိုင်ခြင်း)
+        
+        ---
+        📱 **Official Telegram Channel/Group**: [Mg Khant Group](https://t.me/fruitworld23)
+        """)
 
 # ---------------------------------------------------------------------------
-# Main app
+# Main Router
 # ---------------------------------------------------------------------------
 
 def main():
-    # Sidebar navigation
     with st.sidebar:
-        st.markdown("### 🎙️ Mg Khant အသံပြောင်းစနစ်")
+        st.markdown("<h2 style='text-align: center; color: #818cf8;'>🎙️ Mg Khant Pro</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 13px;'>Advanced Voice Changer</p>", unsafe_allow_html=True)
         st.markdown("---")
+        
         selected = option_menu(
             menu_title=None,
             options=["🗣️ အသံထုတ်ရန်", "🎚️ Effect ပြောင်းရန်", "ℹ️ အကြောင်း", "🔐 Admin"],
             icons=["mic", "sliders", "info-circle", "lock"],
             default_index=0,
+            styles={
+                "container": {"padding": "0!important", "background-color": "transparent"},
+                "icon": {"color": "#818cf8", "font-size": "16px"},
+                "nav-link": {
+                    "font-size": "15px",
+                    "text-align": "left",
+                    "margin": "4px 0",
+                    "border-radius": "10px",
+                    "--hover-color": "rgba(99, 102, 241, 0.15)",
+                },
+                "nav-link-selected": {"background": "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)", "color": "white"},
+            }
         )
         st.markdown("---")
-        st.caption("© 2024 Mg Khant Voice System")
+        st.markdown("<div style='text-align: center; color: #64748b; font-size: 12px;'>© 2026 Mg Khant Voice System<br>All Rights Reserved.</div>", unsafe_allow_html=True)
 
     if selected == "🗣️ အသံထုတ်ရန်":
         tts_page()
