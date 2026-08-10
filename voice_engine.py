@@ -2,6 +2,7 @@ import asyncio
 import html
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -41,15 +42,63 @@ EFFECTS = {
 USAGE_FILE = Path("usage_stats.json")
 
 
+def split_subtitle_segments(text, max_chars=42):
+    """Split Burmese/English text into short, CapCut-friendly subtitle lines."""
+    clean_text = re.sub(r"[ \\t]+", " ", str(text).replace("\r", "")).strip()
+    if not clean_text:
+        return ["အသံဖိုင်"]
+
+    # Prefer sentence endings and newlines, then split long pieces at Burmese
+    # commas or spaces so each subtitle remains readable on a phone screen.
+    parts = re.split(r"(?<=[။!?！？])\s*|\n+", clean_text)
+    segments = []
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        while len(part) > max_chars:
+            cut = max(
+                part.rfind("၊", 0, max_chars + 1),
+                part.rfind(",", 0, max_chars + 1),
+                part.rfind(" ", 0, max_chars + 1),
+            )
+            if cut < max_chars // 2:
+                cut = max_chars
+            segments.append(part[:cut].strip())
+            part = part[cut:].strip(" ၊,")
+        if part:
+            segments.append(part)
+    return segments or [clean_text]
+
+
+def _srt_time(seconds):
+    total_ms = max(0, int(round(seconds * 1000)))
+    hours, remainder = divmod(total_ms, 3_600_000)
+    minutes, remainder = divmod(remainder, 60_000)
+    secs, millis = divmod(remainder, 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+
+def write_segmented_srt(text, output_path):
+    """Write one short subtitle cue per sentence/line for CapCut import."""
+    segments = split_subtitle_segments(text)
+    current = 0.0
+    cues = []
+    for index, segment in enumerate(segments, 1):
+        # Estimate timing without ffmpeg; longer lines stay on screen longer.
+        duration = max(1.2, min(6.0, len(segment) / 8.0))
+        start = current
+        end = current + duration
+        cues.append(
+            f"{index}\n{_srt_time(start)} --> {_srt_time(end)}\n{segment}\n"
+        )
+        current = end
+    Path(output_path).write_text("\n".join(cues), encoding="utf-8")
+
+
 def write_fallback_srt(text, output_path, duration_seconds=30):
-    """Write a valid single-cue SRT when the provider returns no timestamps."""
-    clean_text = " ".join(str(text).split())
-    srt = (
-        "1\n"
-        "00:00:00,000 --> 00:00:{:02d},000\n"
-        "{}\n"
-    ).format(duration_seconds, clean_text)
-    Path(output_path).write_text(srt, encoding="utf-8")
+    """Backward-compatible wrapper that now writes segmented SRT cues."""
+    write_segmented_srt(text, output_path)
 
 
 def increment_usage():
@@ -89,11 +138,8 @@ async def generate_edge_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz")
             elif chunk["type"] == "WordBoundary":
                 submaker.feed(chunk)
 
-    srt_text = submaker.get_srt().strip()
-    if srt_text:
-        sub_file.write_text(srt_text + "\n", encoding="utf-8")
-    else:
-        write_fallback_srt(text, sub_file)
+    # Use sentence-based cues so the same SRT imports cleanly into CapCut.
+    write_segmented_srt(text, sub_file)
     return output_file, sub_file
 
 
