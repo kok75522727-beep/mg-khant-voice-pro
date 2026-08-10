@@ -42,15 +42,29 @@ EFFECTS = {
 USAGE_FILE = Path("usage_stats.json")
 
 
-def split_subtitle_segments(text, max_chars=10):
-    """Split text into exact 10-character chunks for CapCut subtitles."""
-    clean_text = re.sub(r"\s+", "", str(text).replace("\r", "")).strip()
+def split_subtitle_segments(text, max_chars=15):
+    """Keep Burmese spacing and split subtitles at readable phrase boundaries."""
+    clean_text = re.sub(r"\s+", " ", str(text).replace("\r", "")).strip()
     if not clean_text:
         return ["အသံဖိုင်"]
-    return [
-        clean_text[i:i + max_chars]
-        for i in range(0, len(clean_text), max_chars)
-    ]
+
+    sentences = re.split(r"(?<=[။!?！？])\s*|\n+", clean_text)
+    segments = []
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        while len(sentence) > max_chars:
+            cut = sentence.rfind(" ", 0, max_chars + 1)
+            # Burmese often has no spaces between syllables; only hard-split
+            # when no safe word/phrase boundary exists.
+            if cut < 5:
+                cut = max_chars
+            segments.append(sentence[:cut].strip())
+            sentence = sentence[cut:].lstrip()
+        if sentence:
+            segments.append(sentence)
+    return segments or [clean_text]
 
 
 def _srt_time(seconds):
@@ -67,8 +81,8 @@ def write_segmented_srt(text, output_path):
     current = 0.0
     cues = []
     for index, segment in enumerate(segments, 1):
-        # Keep each 10-character cue separate for clean CapCut cuts.
-        duration = 1.2
+        # Keep each 15-character cue separate for clean CapCut cuts.
+        duration = 1.6
         start = current
         end = current + duration
         cues.append(
