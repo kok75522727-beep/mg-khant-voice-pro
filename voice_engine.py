@@ -47,8 +47,8 @@ EFFECTS = {
 USAGE_FILE = Path("usage_stats.json")
 
 
-def split_subtitle_segments(text, max_chars=15):
-    """Keep Burmese spacing and split subtitles at readable phrase boundaries."""
+def split_subtitle_segments(text, max_chars=40):
+    """Split Burmese into natural phrase-length lines for CapCut."""
     clean_text = re.sub(r"\s+", " ", str(text).replace("\r", "")).strip()
     if not clean_text:
         return ["အသံဖိုင်"]
@@ -61,8 +61,8 @@ def split_subtitle_segments(text, max_chars=15):
             continue
         while len(sentence) > max_chars:
             cut = sentence.rfind(" ", 0, max_chars + 1)
-            # Burmese often has no spaces between syllables; only hard-split
-            # when no safe word/phrase boundary exists.
+        # Prefer a nearby space so Burmese words and phrases stay readable;
+        # only hard-split when there is no safe boundary.
             if cut < 5:
                 cut = max_chars
             segments.append(sentence[:cut].strip())
