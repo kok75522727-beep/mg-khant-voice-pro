@@ -1,25 +1,30 @@
 import asyncio
-import edge_tts
-import os
-import subprocess
+import html
 import json
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
+import edge_tts
+import requests
+
 # ---------------------------------------------------------------------------
-# Voice Lists with 10 Distinct Celebrity Names & Hz Pitch Offsets
+# Voice list: first two are the existing Myanmar Edge voices; the next eight
+# are Azure multilingual voices. The names shown in the UI are labels only.
 # ---------------------------------------------------------------------------
 
 FEATURED_VOICES = [
-    ('my-MM-ThihaNeural', '+0Hz', 'Thiha', 'စိုင်းစိုင်းခန့်လှိုင်း (Natural)'),
-    ('my-MM-ThihaNeural', '-15Hz', 'NayToe', 'နေတိုး (Deep Baritone)'),
-    ('my-MM-ThihaNeural', '+15Hz', 'PyayTiOo', 'ပြေတီဦး (Bright Tenor)'),
-    ('my-MM-ThihaNeural', '-30Hz', 'MyintMyat', 'မြင့်မြတ် (Deep Bass)'),
-    ('my-MM-ThihaNeural', '+30Hz', 'LuMin', 'လူမင်း (High Pitch)'),
-    ('my-MM-NilarNeural', '+0Hz', 'Nilar', 'ဝတ်မှုံရွှေရည် (Natural)'),
-    ('my-MM-NilarNeural', '-15Hz', 'PhwayPhway', 'ဖွေးဖွေး (Soft Warm)'),
-    ('my-MM-NilarNeural', '+12Hz', 'Eaindra', 'အိန္ဒြာကျော်ဇင် (Clear High)'),
-    ('my-MM-NilarNeural', '-25Hz', 'PaingPhyo', 'ပိုင်ဖြိုးသု (Deep Soft)'),
-    ('my-MM-NilarNeural', '+22Hz', 'KhaingThin', 'ခိုင်သင်းကြည် (Bright Soprano)')
+    ("edge:my-MM-ThihaNeural", "+0Hz", "Thiha", "မြန်မာအသံ (Thiha)"),
+    ("edge:my-MM-NilarNeural", "+0Hz", "Nilar", "မြန်မာအသံ (Nilar)"),
+    ("azure:en-US-AvaMultilingualNeural", "+0Hz", "Ava", "Azure Multilingual"),
+    ("azure:en-US-AndrewMultilingualNeural", "+0Hz", "Andrew", "Azure Multilingual"),
+    ("azure:en-US-BrianMultilingualNeural", "+0Hz", "Brian", "Azure Multilingual"),
+    ("azure:en-US-EmmaMultilingualNeural", "+0Hz", "Emma", "Azure Multilingual"),
+    ("azure:fr-FR-VivienneMultilingualNeural", "+0Hz", "Vivienne", "Azure Multilingual"),
+    ("azure:fr-FR-RemyMultilingualNeural", "+0Hz", "Remy", "Azure Multilingual"),
+    ("azure:de-DE-SeraphinaMultilingualNeural", "+0Hz", "Seraphina", "Azure Multilingual"),
+    ("azure:de-DE-FlorianMultilingualNeural", "+0Hz", "Florian", "Azure Multilingual"),
 ]
 
 EFFECTS = {
@@ -30,124 +35,158 @@ EFFECTS = {
     "Echo": "aecho=0.8:0.9:1000:0.3",
     "Giant": "asetrate=44100*0.6,atempo=1/0.6,aecho=0.8:0.9:20:0.5",
     "Underwater": "lowpass=f=500",
-    "Radio": "highpass=f=500,lowpass=f=3000"
+    "Radio": "highpass=f=500,lowpass=f=3000",
 }
 
-# ---------------------------------------------------------------------------
-# Usage Tracking (Hidden from Users, Admin Only)
-# ---------------------------------------------------------------------------
-
 USAGE_FILE = Path("usage_stats.json")
+
 
 def increment_usage():
     stats = {"count": 0}
     if USAGE_FILE.exists():
         try:
-            with open(USAGE_FILE, "r") as f:
+            with USAGE_FILE.open("r", encoding="utf-8") as f:
                 stats = json.load(f)
-        except:
+        except (OSError, ValueError):
             pass
     stats["count"] = stats.get("count", 0) + 1
-    with open(USAGE_FILE, "w") as f:
+    with USAGE_FILE.open("w", encoding="utf-8") as f:
         json.dump(stats, f)
+
 
 def get_usage_count():
     if USAGE_FILE.exists():
         try:
-            with open(USAGE_FILE, "r") as f:
-                stats = json.load(f)
-                return stats.get("count", 0)
-        except:
+            with USAGE_FILE.open("r", encoding="utf-8") as f:
+                return json.load(f).get("count", 0)
+        except (OSError, ValueError):
             return 0
     return 0
 
-# ---------------------------------------------------------------------------
-# TTS Logic with SRT Generation and Pitch Correction
-# ---------------------------------------------------------------------------
 
-async def generate_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
-    """Generate TTS audio and SRT subtitles using edge_tts with correct pitch."""
+async def generate_edge_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
+    """Generate audio and SRT using the existing Edge TTS Myanmar voices."""
     communicate = edge_tts.Communicate(text, voice, rate=rate, volume=volume, pitch=pitch)
-    output_file = "output.mp3"
-    sub_file = "output.srt"
-    
+    output_file = Path("output.mp3")
+    sub_file = Path("output.srt")
     submaker = edge_tts.SubMaker()
-    with open(output_file, "wb") as f:
+
+    with output_file.open("wb") as f:
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
                 f.write(chunk["data"])
             elif chunk["type"] == "WordBoundary":
                 submaker.feed(chunk)
-    
-    with open(sub_file, "w", encoding="utf-8") as f:
-        f.write(submaker.get_srt())
-    
-    return Path(output_file), Path(sub_file)
+
+    sub_file.write_text(submaker.get_srt(), encoding="utf-8")
+    return output_file, sub_file
+
+
+def generate_azure_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
+    """Generate multilingual speech through Azure Speech REST TTS."""
+    key = os.getenv("AZURE_SPEECH_KEY")
+    region = os.getenv("AZURE_SPEECH_REGION")
+    if not key or not region:
+        raise RuntimeError(
+            "Azure API key မတွေ့ပါ။ AZURE_SPEECH_KEY နှင့် AZURE_SPEECH_REGION ကို environment variable အဖြစ် ထည့်ပါ။"
+        )
+
+    # Azure SSML uses the same percentage/Hz notation used by the UI.
+    escaped_text = html.escape(text)
+    ssml = f'''<speak version="1.0" xml:lang="en-US">
+  <voice name="{html.escape(voice)}">
+    <prosody rate="{rate}" pitch="{pitch}" volume="{volume}">{escaped_text}</prosody>
+  </voice>
+</speak>'''
+
+    endpoint = (
+        f"https://{region}.tts.speech.microsoft.com/cognitiveservices/v1"
+    )
+    response = requests.post(
+        endpoint,
+        headers={
+            "Ocp-Apim-Subscription-Key": key,
+            "Content-Type": "application/ssml+xml",
+            "X-Microsoft-OutputFormat": "audio-24khz-160kbitrate-mono-mp3",
+            "User-Agent": "MgKhantVoiceSystem/1.0",
+        },
+        data=ssml.encode("utf-8"),
+        timeout=60,
+    )
+    if not response.ok:
+        raise RuntimeError(f"Azure TTS error {response.status_code}: {response.text[:300]}")
+
+    output_file = Path("output.mp3")
+    sub_file = Path("output.srt")
+    output_file.write_bytes(response.content)
+    # REST synthesis does not return Edge-style WordBoundary events here.
+    sub_file.write_text("", encoding="utf-8")
+    return output_file, sub_file
+
 
 def run_tts_to_file(text, voice_id, pitch_offset, rate="+0%", suffix="output"):
-    """Run TTS and save to file with SRT support."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        audio_path, sub_path = loop.run_until_complete(
-            generate_tts(text, voice_id, rate=rate, pitch=pitch_offset)
+    """Route Edge voices locally and Azure voices through the configured API."""
+    if voice_id.startswith("azure:"):
+        audio_path, sub_path = generate_azure_tts(
+            text, voice_id.removeprefix("azure:"), rate=rate, pitch=pitch_offset
         )
-        
-        final_audio = Path(f"output_{suffix}.mp3")
-        final_srt = Path(f"output_{suffix}.srt")
-        
-        if audio_path.exists():
-            if audio_path != final_audio:
-                import shutil
-                shutil.copy(audio_path, final_audio)
-        if sub_path.exists():
-            if sub_path != final_srt:
-                import shutil
-                shutil.copy(sub_path, final_srt)
-        
-        increment_usage()
-        return final_audio, final_srt
-    finally:
-        loop.close()
+    else:
+        edge_voice = voice_id.removeprefix("edge:")
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            audio_path, sub_path = loop.run_until_complete(
+                generate_edge_tts(text, edge_voice, rate=rate, pitch=pitch_offset)
+            )
+        finally:
+            loop.close()
+
+    final_audio = Path(f"output_{suffix}.mp3")
+    final_srt = Path(f"output_{suffix}.srt")
+    shutil.copyfile(audio_path, final_audio)
+    shutil.copyfile(sub_path, final_srt)
+    increment_usage()
+    return final_audio, final_srt
+
 
 # ---------------------------------------------------------------------------
-# Audio Effects Logic
+# Audio effects logic
 # ---------------------------------------------------------------------------
+
 
 def apply_effects(input_path, effect_name, tempo=1.0):
-    """Apply audio effects using ffmpeg."""
     input_path = Path(input_path)
     output_path = input_path.parent / f"effect_{input_path.name}"
     filter_str = EFFECTS.get(effect_name, "")
-    
+
     if tempo != 1.0:
-        if filter_str:
-            filter_str += f",atempo={tempo}"
-        else:
-            filter_str = f"atempo={tempo}"
-    
-    if not filter_str:
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", str(input_path), str(output_path)],
-            check=True,
-            capture_output=True
-        )
-    else:
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", str(input_path), "-af", filter_str, str(output_path)],
-            check=True,
-            capture_output=True
-        )
-    
+        filter_str = f"{filter_str},atempo={tempo}" if filter_str else f"atempo={tempo}"
+
+    command = ["ffmpeg", "-y", "-i", str(input_path)]
+    if filter_str:
+        command += ["-af", filter_str]
+    command += [str(output_path)]
+    subprocess.run(command, check=True, capture_output=True)
     return output_path
 
+
 def change_tempo(input_path, tempo):
-    """Change audio tempo using ffmpeg."""
     input_path = Path(input_path)
     output_path = input_path.parent / f"tempo_{input_path.name}"
     subprocess.run(
         ["ffmpeg", "-y", "-i", str(input_path), "-af", f"atempo={tempo}", str(output_path)],
         check=True,
-        capture_output=True
+        capture_output=True,
     )
     return output_path
+
+
+__all__ = [
+    "FEATURED_VOICES",
+    "EFFECTS",
+    "change_tempo",
+    "get_usage_count",
+    "run_tts_to_file",
+    "apply_effects",
+]
+
