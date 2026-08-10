@@ -335,9 +335,10 @@ def tts_page():
         action_text = text.strip() if text.strip() else "အားလုံးပဲ မင်္ဂလာပါ။ Mg Khant AI မှ ကြိုဆိုပါတယ်။"
         with st.spinner("⏳ အသံဖိုင် ဖန်တီးနေပါသည်... ခဏစောင့်ပါ။"):
                 try:
-                    # Apply speed once with ffmpeg after synthesis. Passing the
-                    # rate to Edge/Azure as well would double-apply the speed.
-                    rate_str = "+0%"
+                    # Use the TTS engine's rate control so Streamlit Cloud does
+                    # not need the external ffmpeg binary.
+                    rate_percent = (speed - 1.0) * 100.0
+                    rate_str = f"{rate_percent:+.0f}%"
                     pitch_str = f"{pitch_value:+d}Hz"
 
                     audio_path, srt_path = run_tts_to_file(
@@ -347,9 +348,6 @@ def tts_page():
                         rate=rate_str,
                         suffix="custom"
                     )
-                    
-                    if speed != 1.0:
-                        audio_path = change_tempo(audio_path, speed)
                     
                     st.session_state.last_audio = audio_path
                     st.session_state.last_srt = srt_path
