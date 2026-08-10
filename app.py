@@ -86,17 +86,23 @@ def inject_custom_css():
 
     /* Text areas and inputs */
     .stTextArea textarea, .stTextInput input {
-        background-color: rgba(15, 23, 42, 0.7) !important;
-        color: var(--text-light) !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        border-radius: 12px !important;
+        background: linear-gradient(145deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.96)) !important;
+        color: #ffffff !important;
+        caret-color: #f9a8d4 !important;
+        border: 1px solid rgba(165, 180, 252, 0.65) !important;
+        border-radius: 14px !important;
         padding: 12px !important;
         font-size: 15px !important;
     }
 
+    .stTextArea textarea::placeholder, .stTextInput input::placeholder {
+        color: rgba(226, 232, 240, 0.72) !important;
+        opacity: 1 !important;
+    }
+
     .stTextArea textarea:focus, .stTextInput input:focus {
-        border-color: var(--primary-color) !important;
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2) !important;
+        border-color: #f472b6 !important;
+        box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.25), 0 0 18px rgba(99, 102, 241, 0.18) !important;
     }
 
     /* Metric cards */
@@ -175,7 +181,7 @@ def inject_custom_css():
         padding: 10px 8px !important;
         border: 1px solid rgba(129, 140, 248, 0.35) !important;
         border-radius: 14px !important;
-        background: linear-gradient(145deg, rgba(99, 102, 241, 0.22), rgba(30, 41, 59, 0.82)) !important;
+        background: linear-gradient(145deg, rgba(71, 85, 180, 0.62), rgba(51, 65, 85, 0.96)) !important;
         display: flex !important;
         flex-direction: column !important;
         align-items: center !important;
@@ -197,9 +203,24 @@ def inject_custom_css():
     }
 
     div[role="radiogroup"] > label p {
+        color: #ffffff !important;
         font-size: 12px !important;
         font-weight: 700 !important;
         line-height: 1.25 !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+    }
+
+    div[role="radiogroup"] > label span {
+        color: #ffffff !important;
+    }
+
+    [data-testid="stCaptionContainer"] p {
+        color: #cbd5e1 !important;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+    [data-testid="stSidebar"] .nav-link {
+        color: #e2e8f0 !important;
     }
 
     /* Audio player styling */
@@ -314,14 +335,15 @@ def tts_page():
         action_text = text.strip() if text.strip() else "အားလုံးပဲ မင်္ဂလာပါ။ Mg Khant AI မှ ကြိုဆိုပါတယ်။"
         with st.spinner("⏳ အသံဖိုင် ဖန်တီးနေပါသည်... ခဏစောင့်ပါ။"):
                 try:
-                    pitch_str = f"{pitch_value:+d}%" if pitch_value != 0 else "+0%"
-                    rate_percent = (speed - 1) * 100
-                    rate_str = f"{rate_percent:+.0f}%"
-                    
+                    # Apply speed once with ffmpeg after synthesis. Passing the
+                    # rate to Edge/Azure as well would double-apply the speed.
+                    rate_str = "+0%"
+                    pitch_str = f"{pitch_value:+d}Hz"
+
                     audio_path, srt_path = run_tts_to_file(
                         action_text,
-                        voice_id, 
-                        pitch_offset,
+                        voice_id,
+                        pitch_str,
                         rate=rate_str,
                         suffix="custom"
                     )
