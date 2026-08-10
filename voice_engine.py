@@ -42,33 +42,15 @@ EFFECTS = {
 USAGE_FILE = Path("usage_stats.json")
 
 
-def split_subtitle_segments(text, max_chars=42):
-    """Split Burmese/English text into short, CapCut-friendly subtitle lines."""
-    clean_text = re.sub(r"[ \\t]+", " ", str(text).replace("\r", "")).strip()
+def split_subtitle_segments(text, max_chars=10):
+    """Split text into exact 10-character chunks for CapCut subtitles."""
+    clean_text = re.sub(r"\s+", "", str(text).replace("\r", "")).strip()
     if not clean_text:
         return ["အသံဖိုင်"]
-
-    # Prefer sentence endings and newlines, then split long pieces at Burmese
-    # commas or spaces so each subtitle remains readable on a phone screen.
-    parts = re.split(r"(?<=[။!?！？])\s*|\n+", clean_text)
-    segments = []
-    for part in parts:
-        part = part.strip()
-        if not part:
-            continue
-        while len(part) > max_chars:
-            cut = max(
-                part.rfind("၊", 0, max_chars + 1),
-                part.rfind(",", 0, max_chars + 1),
-                part.rfind(" ", 0, max_chars + 1),
-            )
-            if cut < max_chars // 2:
-                cut = max_chars
-            segments.append(part[:cut].strip())
-            part = part[cut:].strip(" ၊,")
-        if part:
-            segments.append(part)
-    return segments or [clean_text]
+    return [
+        clean_text[i:i + max_chars]
+        for i in range(0, len(clean_text), max_chars)
+    ]
 
 
 def _srt_time(seconds):
@@ -85,8 +67,8 @@ def write_segmented_srt(text, output_path):
     current = 0.0
     cues = []
     for index, segment in enumerate(segments, 1):
-        # Estimate timing without ffmpeg; longer lines stay on screen longer.
-        duration = max(1.2, min(6.0, len(segment) / 8.0))
+        # Keep each 10-character cue separate for clean CapCut cuts.
+        duration = 1.2
         start = current
         end = current + duration
         cues.append(
