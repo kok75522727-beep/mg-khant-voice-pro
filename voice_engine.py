@@ -6,20 +6,20 @@ import json
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Voice Lists with 10 Distinct Celebrity Names & Percentage Pitch Offsets
+# Voice Lists with 10 Distinct Celebrity Names & Hz Pitch Offsets
 # ---------------------------------------------------------------------------
 
 FEATURED_VOICES = [
-    ('my-MM-ThihaNeural', '+0%', 'Thiha', 'စိုင်းစိုင်းခန့်လှိုင်း (Natural)'),
-    ('my-MM-ThihaNeural', '-15%', 'NayToe', 'နေတိုး (Deep Baritone)'),
-    ('my-MM-ThihaNeural', '+15%', 'PyayTiOo', 'ပြေတီဦး (Bright Tenor)'),
-    ('my-MM-ThihaNeural', '-30%', 'MyintMyat', 'မြင့်မြတ် (Deep Bass)'),
-    ('my-MM-ThihaNeural', '+30%', 'LuMin', 'လူမင်း (High Pitch)'),
-    ('my-MM-NilarNeural', '+0%', 'Nilar', 'ဝတ်မှုံရွှေရည် (Natural)'),
-    ('my-MM-NilarNeural', '-15%', 'PhwayPhway', 'ဖွေးဖွေး (Soft Warm)'),
-    ('my-MM-NilarNeural', '+15%', 'Eaindra', 'အိန္ဒြာကျော်ဇင် (Clear High)'),
-    ('my-MM-NilarNeural', '-30%', 'PaingPhyo', 'ပိုင်ဖြိုးသု (Deep Soft)'),
-    ('my-MM-NilarNeural', '+30%', 'KhaingThin', 'ခိုင်သင်းကြည် (Bright Soprano)')
+    ('my-MM-ThihaNeural', '+0Hz', 'Thiha', 'စိုင်းစိုင်းခန့်လှိုင်း (Natural)'),
+    ('my-MM-ThihaNeural', '-15Hz', 'NayToe', 'နေတိုး (Deep Baritone)'),
+    ('my-MM-ThihaNeural', '+15Hz', 'PyayTiOo', 'ပြေတီဦး (Bright Tenor)'),
+    ('my-MM-ThihaNeural', '-30Hz', 'MyintMyat', 'မြင့်မြတ် (Deep Bass)'),
+    ('my-MM-ThihaNeural', '+30Hz', 'LuMin', 'လူမင်း (High Pitch)'),
+    ('my-MM-NilarNeural', '+0Hz', 'Nilar', 'ဝတ်မှုံရွှေရည် (Natural)'),
+    ('my-MM-NilarNeural', '-15Hz', 'PhwayPhway', 'ဖွေးဖွေး (Soft Warm)'),
+    ('my-MM-NilarNeural', '+12Hz', 'Eaindra', 'အိန္ဒြာကျော်ဇင် (Clear High)'),
+    ('my-MM-NilarNeural', '-25Hz', 'PaingPhyo', 'ပိုင်ဖြိုးသု (Deep Soft)'),
+    ('my-MM-NilarNeural', '+22Hz', 'KhaingThin', 'ခိုင်သင်းကြည် (Bright Soprano)')
 ]
 
 EFFECTS = {
@@ -65,7 +65,7 @@ def get_usage_count():
 # TTS Logic with SRT Generation and Pitch Correction
 # ---------------------------------------------------------------------------
 
-async def generate_tts(text, voice, rate="+0%", volume="+0%", pitch="+0%"):
+async def generate_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
     """Generate TTS audio and SRT subtitles using edge_tts with correct pitch."""
     communicate = edge_tts.Communicate(text, voice, rate=rate, volume=volume, pitch=pitch)
     output_file = "output.mp3"
@@ -84,40 +84,8 @@ async def generate_tts(text, voice, rate="+0%", volume="+0%", pitch="+0%"):
     
     return Path(output_file), Path(sub_file)
 
-def apply_pitch_shift(audio_path, pitch_offset):
-    """Apply post-processing pitch shift using ffmpeg if pitch_offset is non-zero."""
-    if not pitch_offset or pitch_offset == "+0%":
-        return audio_path
-    
-    # Parse percentage offset e.g., "+15%" -> 0.15
-    try:
-        pct = float(pitch_offset.strip('%+'))
-        if pitch_offset.startswith('-'):
-            pct = -pct
-        # Calculate sample rate multiplier: e.g. +15% -> 1.15, -15% -> 0.85
-        multiplier = 1.0 + (pct / 100.0)
-    except:
-        return audio_path
-
-    output_path = audio_path.parent / f"pitched_{audio_path.name}"
-    # Using asetrate and atempo to change pitch while preserving speed
-    filter_str = f"asetrate=44100*{multiplier},atempo={1/multiplier}"
-    
-    try:
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", str(audio_path), "-af", filter_str, str(output_path)],
-            check=True,
-            capture_output=True
-        )
-        if output_path.exists():
-            return output_path
-    except Exception as e:
-        print(f"Pitch shift error: {e}")
-        
-    return audio_path
-
 def run_tts_to_file(text, voice_id, pitch_offset, rate="+0%", suffix="output"):
-    """Run TTS, apply pitch correction, and save to file with SRT support."""
+    """Run TTS and save to file with SRT support."""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
@@ -125,9 +93,6 @@ def run_tts_to_file(text, voice_id, pitch_offset, rate="+0%", suffix="output"):
             generate_tts(text, voice_id, rate=rate, pitch=pitch_offset)
         )
         
-        # Apply ffmpeg post-processing pitch shift to guarantee distinct voices
-        audio_path = apply_pitch_shift(audio_path, pitch_offset)
-
         final_audio = Path(f"output_{suffix}.mp3")
         final_srt = Path(f"output_{suffix}.srt")
         
