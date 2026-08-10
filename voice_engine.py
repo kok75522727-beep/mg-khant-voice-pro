@@ -6,20 +6,20 @@ import json
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Voice Lists with 10 Celebrity Names
+# Voice Lists with 10 Celebrity Names (Varied Pitches for Distinction)
 # ---------------------------------------------------------------------------
 
 FEATURED_VOICES = [
     ('my-MM-ThihaNeural', '+0Hz', 'Thiha', 'စိုင်းစိုင်းခန့်လှိုင်း'),
-    ('my-MM-ThihaNeural', '-5Hz', 'NayToe', 'နေတိုး'),
-    ('my-MM-ThihaNeural', '+5Hz', 'PyayTiOo', 'ပြေတီဦး'),
-    ('my-MM-ThihaNeural', '-10Hz', 'MyintMyat', 'မြင့်မြတ်'),
-    ('my-MM-ThihaNeural', '+10Hz', 'LuMin', 'လူမင်း'),
+    ('my-MM-ThihaNeural', '-15Hz', 'NayToe', 'နေတိုး'),
+    ('my-MM-ThihaNeural', '+12Hz', 'PyayTiOo', 'ပြေတီဦး'),
+    ('my-MM-ThihaNeural', '-25Hz', 'MyintMyat', 'မြင့်မြတ်'),
+    ('my-MM-ThihaNeural', '+22Hz', 'LuMin', 'လူမင်း'),
     ('my-MM-NilarNeural', '+0Hz', 'Nilar', 'ဝတ်မှုံရွှေရည်'),
-    ('my-MM-NilarNeural', '-5Hz', 'PhwayPhway', 'ဖွေးဖွေး'),
-    ('my-MM-NilarNeural', '+5Hz', 'Eaindra', 'အိန္ဒြာကျော်ဇင်'),
-    ('my-MM-NilarNeural', '-10Hz', 'PaingPhyo', 'ပိုင်ဖြိုးသု'),
-    ('my-MM-NilarNeural', '+10Hz', 'KhaingThin', 'ခိုင်သင်းကြည်')
+    ('my-MM-NilarNeural', '-15Hz', 'PhwayPhway', 'ဖွေးဖွေး'),
+    ('my-MM-NilarNeural', '+12Hz', 'Eaindra', 'အိန္ဒြာကျော်ဇင်'),
+    ('my-MM-NilarNeural', '-25Hz', 'PaingPhyo', 'ပိုင်ဖြိုးသု'),
+    ('my-MM-NilarNeural', '+22Hz', 'KhaingThin', 'ခိုင်သင်းကြည်')
 ]
 
 EFFECTS = {
@@ -150,4 +150,3 @@ def change_tempo(input_path, tempo):
         capture_output=True
     )
     return output_path
-    
