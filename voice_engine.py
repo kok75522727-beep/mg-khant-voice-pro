@@ -2,125 +2,134 @@ import asyncio
 import edge_tts
 import subprocess
 import json
-import shutil
 from pathlib import Path
 
 
 # ============================================================
-# 10 VOICE PRESETS
+# FEATURED VOICES
+# Format:
+# (edge_voice, pitch, name, display_name)
 # ============================================================
 
 FEATURED_VOICES = [
-    {
-        "id": "thiha",
-        "voice": "my-MM-ThihaNeural",
-        "name": "Thiha",
-        "display": "စိုင်းစိုင်းခန့်လှိုင်း",
-        "pitch": "+0Hz",
-        "rate": "+0%",
-        "volume": "+0%",
-        "effect": "None",
-    },
-
-    {
-        "id": "naytoe",
-        "voice": "my-MM-ThihaNeural",
-        "name": "NayToe",
-        "display": "နေတိုး",
-        "pitch": "-18Hz",
-        "rate": "-5%",
-        "volume": "+0%",
-        "effect": "Deep",
-    },
-
-    {
-        "id": "pyayti",
-        "voice": "my-MM-ThihaNeural",
-        "name": "PyayTiOo",
-        "display": "ပြေတီဦး",
-        "pitch": "+15Hz",
-        "rate": "+3%",
-        "volume": "+0%",
-        "effect": "None",
-    },
-
-    {
-        "id": "myintmyat",
-        "voice": "my-MM-ThihaNeural",
-        "name": "MyintMyat",
-        "display": "မြင့်မြတ်",
-        "pitch": "-30Hz",
-        "rate": "-8%",
-        "volume": "+0%",
-        "effect": "Giant",
-    },
-
-    {
-        "id": "lumin",
-        "voice": "my-MM-ThihaNeural",
-        "name": "LuMin",
-        "display": "လူမင်း",
-        "pitch": "+25Hz",
-        "rate": "+6%",
-        "volume": "+0%",
-        "effect": "Radio",
-    },
-
-    {
-        "id": "nilar",
-        "voice": "my-MM-NilarNeural",
-        "name": "Nilar",
-        "display": "ဝတ်မှုံရွှေရည်",
-        "pitch": "+0Hz",
-        "rate": "+0%",
-        "volume": "+0%",
-        "effect": "None",
-    },
-
-    {
-        "id": "phwayphway",
-        "voice": "my-MM-NilarNeural",
-        "name": "PhwayPhway",
-        "display": "ဖွေးဖွေး",
-        "pitch": "+12Hz",
-        "rate": "+4%",
-        "volume": "+0%",
-        "effect": "Echo",
-    },
-
-    {
-        "id": "eaindra",
-        "voice": "my-MM-NilarNeural",
-        "name": "Eaindra",
-        "display": "အိန္ဒြာကျော်ဇင်",
-        "pitch": "+20Hz",
-        "rate": "+5%",
-        "volume": "+0%",
-        "effect": "None",
-    },
-
-    {
-        "id": "paingphyo",
-        "voice": "my-MM-NilarNeural",
-        "name": "PaingPhyo",
-        "display": "ပိုင်ဖြိုးသု",
-        "pitch": "-20Hz",
-        "rate": "-5%",
-        "volume": "+0%",
-        "effect": "Deep",
-    },
-
-    {
-        "id": "khaingthin",
-        "voice": "my-MM-NilarNeural",
-        "name": "KhaingThin",
-        "display": "ခိုင်သင်းကြည်",
-        "pitch": "+28Hz",
-        "rate": "+7%",
-        "volume": "+0%",
-        "effect": "Radio",
-    },
+    (
+        "my-MM-ThihaNeural",
+        "+0Hz",
+        "Thiha",
+        "စိုင်းစိုင်းခန့်လှိုင်း"
+    ),
+    (
+        "my-MM-ThihaNeural",
+        "-18Hz",
+        "NayToe",
+        "နေတိုး"
+    ),
+    (
+        "my-MM-ThihaNeural",
+        "+15Hz",
+        "PyayTiOo",
+        "ပြေတီဦး"
+    ),
+    (
+        "my-MM-ThihaNeural",
+        "-30Hz",
+        "MyintMyat",
+        "မြင့်မြတ်"
+    ),
+    (
+        "my-MM-ThihaNeural",
+        "+25Hz",
+        "LuMin",
+        "လူမင်း"
+    ),
+    (
+        "my-MM-NilarNeural",
+        "+0Hz",
+        "Nilar",
+        "ဝတ်မှုံရွှေရည်"
+    ),
+    (
+        "my-MM-NilarNeural",
+        "+12Hz",
+        "PhwayPhway",
+        "ဖွေးဖွေး"
+    ),
+    (
+        "my-MM-NilarNeural",
+        "+20Hz",
+        "Eaindra",
+        "အိန္ဒြာကျော်ဇင်"
+    ),
+    (
+        "my-MM-NilarNeural",
+        "-20Hz",
+        "PaingPhyo",
+        "ပိုင်ဖြိုးသု"
+    ),
+    (
+        "my-MM-NilarNeural",
+        "+28Hz",
+        "KhaingThin",
+        "ခိုင်သင်းကြည်"
+    ),
 ]
+
+
+# ============================================================
+# VOICE EXTRA SETTINGS
+# ============================================================
+
+VOICE_SETTINGS = {
+    "Thiha": {
+        "rate": "+0%",
+        "effect": "None"
+    },
+
+    "NayToe": {
+        "rate": "-5%",
+        "effect": "Deep"
+    },
+
+    "PyayTiOo": {
+        "rate": "+3%",
+        "effect": "None"
+    },
+
+    "MyintMyat": {
+        "rate": "-8%",
+        "effect": "Giant"
+    },
+
+    "LuMin": {
+        "rate": "+6%",
+        "effect": "Radio"
+    },
+
+    "Nilar": {
+        "rate": "+0%",
+        "effect": "None"
+    },
+
+    "PhwayPhway": {
+        "rate": "+4%",
+        "effect": "High"
+    },
+
+    "Eaindra": {
+        "rate": "+5%",
+        "effect": "None"
+    },
+
+    "PaingPhyo": {
+        "rate": "-5%",
+        "effect": "Deep"
+    },
+
+    "KhaingThin": {
+        "rate": "+7%",
+        "effect": "Radio"
+    }
+}
 
 
 # ============================================================
@@ -128,6 +137,7 @@ FEATURED_VOICES = [
 # ============================================================
 
 EFFECTS = {
+
     "None": "",
 
     "Deep":
@@ -146,12 +156,12 @@ EFFECTS = {
         "atempo=1.3333,"
         "aecho=0.8:0.85:30:0.35",
 
-    "Echo":
-        "aecho=0.8:0.88:700:0.25",
-
     "Radio":
         "highpass=f=500,"
         "lowpass=f=3200",
+
+    "Echo":
+        "aecho=0.8:0.88:700:0.25",
 
     "Robot":
         "aformat=sample_fmts=s16:sample_rates=44100,"
@@ -180,52 +190,72 @@ USAGE_FILE = Path("usage_stats.json")
 
 
 def increment_usage():
-    stats = {"count": 0}
+
+    stats = {
+        "count": 0
+    }
 
     if USAGE_FILE.exists():
+
         try:
+
             with open(
                 USAGE_FILE,
                 "r",
                 encoding="utf-8"
             ) as f:
-                stats = json.load(f)
-        except Exception:
-            stats = {"count": 0}
 
-    stats["count"] = stats.get("count", 0) + 1
+                stats = json.load(f)
+
+        except Exception:
+
+            pass
+
+    stats["count"] = (
+        stats.get("count", 0) + 1
+    )
 
     try:
+
         with open(
             USAGE_FILE,
             "w",
             encoding="utf-8"
         ) as f:
+
             json.dump(
                 stats,
                 f,
-                ensure_ascii=False,
-                indent=2
+                ensure_ascii=False
             )
+
     except Exception:
+
         pass
 
 
 def get_usage_count():
+
     if not USAGE_FILE.exists():
         return 0
 
     try:
+
         with open(
             USAGE_FILE,
             "r",
             encoding="utf-8"
         ) as f:
+
             stats = json.load(f)
 
-        return stats.get("count", 0)
+        return stats.get(
+            "count",
+            0
+        )
 
     except Exception:
+
         return 0
 
 
@@ -233,18 +263,28 @@ def get_usage_count():
 # FIND VOICE
 # ============================================================
 
-def get_voice_by_id(voice_id):
+def get_voice_info(voice_name):
 
-    for voice in FEATURED_VOICES:
+    for (
+        voice_id,
+        pitch,
+        name,
+        label
+    ) in FEATURED_VOICES:
 
-        if voice["id"] == voice_id:
-            return voice
+        if name == voice_name:
+            return (
+                voice_id,
+                pitch,
+                name,
+                label
+            )
 
     return None
 
 
 # ============================================================
-# ASYNC EDGE TTS
+# EDGE TTS
 # ============================================================
 
 async def generate_tts(
@@ -258,7 +298,10 @@ async def generate_tts(
 ):
 
     if not text or not text.strip():
-        raise ValueError("Text cannot be empty.")
+
+        raise ValueError(
+            "Text cannot be empty."
+        )
 
     communicate = edge_tts.Communicate(
         text=text,
@@ -304,10 +347,10 @@ async def generate_tts(
 
 
 # ============================================================
-# RUN EDGE TTS
+# ASYNC RUNNER
 # ============================================================
 
-def _run_async(coro):
+def run_async(coro):
 
     loop = asyncio.new_event_loop()
 
@@ -315,7 +358,9 @@ def _run_async(coro):
 
         asyncio.set_event_loop(loop)
 
-        return loop.run_until_complete(coro)
+        return loop.run_until_complete(
+            coro
+        )
 
     finally:
 
@@ -325,41 +370,23 @@ def _run_async(coro):
 
 
 # ============================================================
-# APPLY AUDIO EFFECT
+# APPLY EFFECTS
 # ============================================================
 
 def apply_effects(
     input_path,
     effect_name="None",
-    tempo=1.0,
-    output_name=None
+    tempo=1.0
 ):
 
-    input_path = Path(input_path)
+    input_path = Path(
+        input_path
+    )
 
-    if not input_path.exists():
-        raise FileNotFoundError(
-            f"Audio file not found: {input_path}"
-        )
-
-    if shutil.which("ffmpeg") is None:
-        raise RuntimeError(
-            "FFmpeg is not installed or not available."
-        )
-
-    if output_name:
-
-        output_path = (
-            input_path.parent /
-            output_name
-        )
-
-    else:
-
-        output_path = (
-            input_path.parent /
-            f"effect_{input_path.stem}.mp3"
-        )
+    output_path = (
+        input_path.parent /
+        f"effect_{input_path.stem}.mp3"
+    )
 
     filter_str = EFFECTS.get(
         effect_name,
@@ -387,7 +414,7 @@ def apply_effects(
         "ffmpeg",
         "-y",
         "-i",
-        str(input_path),
+        str(input_path)
     ]
 
     if filter_str:
@@ -405,27 +432,11 @@ def apply_effects(
         str(output_path)
     ])
 
-    try:
-
-        result = subprocess.run(
-            command,
-            check=True,
-            capture_output=True,
-            text=True
-        )
-
-    except subprocess.CalledProcessError as e:
-
-        error_message = (
-            e.stderr
-            if e.stderr
-            else "Unknown FFmpeg error."
-        )
-
-        raise RuntimeError(
-            f"FFmpeg audio processing failed:\n"
-            f"{error_message}"
-        )
+    subprocess.run(
+        command,
+        check=True,
+        capture_output=True
+    )
 
     return output_path
 
@@ -439,31 +450,22 @@ def change_tempo(
     tempo
 ):
 
-    input_path = Path(input_path)
+    input_path = Path(
+        input_path
+    )
 
-    if not input_path.exists():
-        raise FileNotFoundError(
-            f"Audio file not found: {input_path}"
-        )
+    output_path = (
+        input_path.parent /
+        f"tempo_{input_path.stem}.mp3"
+    )
 
     tempo = float(tempo)
 
-    if tempo <= 0:
-        raise ValueError(
-            "Tempo must be greater than 0."
-        )
-
-    # FFmpeg atempo supports 0.5 - 2.0
     if tempo < 0.5:
         tempo = 0.5
 
     if tempo > 2.0:
         tempo = 2.0
-
-    output_path = (
-        input_path.parent /
-        f"tempo_{input_path.name}"
-    )
 
     subprocess.run(
         [
@@ -471,7 +473,7 @@ def change_tempo(
             "-y",
             "-i",
             str(input_path),
-            "-filter:a",
+            "-af",
             f"atempo={tempo}",
             "-codec:a",
             "libmp3lame",
@@ -487,153 +489,85 @@ def change_tempo(
 
 
 # ============================================================
-# GENERATE VOICE
-# ============================================================
-
-def generate_voice(
-    text,
-    voice_id,
-    tempo=1.0,
-    suffix="voice"
-):
-
-    selected = get_voice_by_id(
-        voice_id
-    )
-
-    if selected is None:
-
-        raise ValueError(
-            f"Unknown voice ID: {voice_id}"
-        )
-
-    safe_suffix = str(
-        suffix
-    ).replace(
-        " ",
-        "_"
-    )
-
-    raw_audio = Path(
-        f"raw_{safe_suffix}.mp3"
-    )
-
-    raw_srt = Path(
-        f"raw_{safe_suffix}.srt"
-    )
-
-    final_audio = Path(
-        f"output_{safe_suffix}.mp3"
-    )
-
-    final_srt = Path(
-        f"output_{safe_suffix}.srt"
-    )
-
-    # ----------------------------------------
-    # Generate TTS
-    # ----------------------------------------
-
-    _run_async(
-        generate_tts(
-            text=text,
-            voice=selected["voice"],
-            rate=selected["rate"],
-            volume=selected["volume"],
-            pitch=selected["pitch"],
-            output_file=str(raw_audio),
-            sub_file=str(raw_srt)
-        )
-    )
-
-    # ----------------------------------------
-    # Apply voice effect
-    # ----------------------------------------
-
-    processed_audio = apply_effects(
-        input_path=raw_audio,
-        effect_name=selected["effect"],
-        tempo=tempo,
-        output_name=final_audio.name
-    )
-
-    # ----------------------------------------
-    # Move SRT
-    # ----------------------------------------
-
-    if raw_srt.exists():
-
-        if final_srt.exists():
-            final_srt.unlink()
-
-        raw_srt.replace(
-            final_srt
-        )
-
-    # ----------------------------------------
-    # Delete temporary audio
-    # ----------------------------------------
-
-    if raw_audio.exists():
-
-        try:
-            raw_audio.unlink()
-        except Exception:
-            pass
-
-    increment_usage()
-
-    return (
-        processed_audio,
-        final_srt
-    )
-
-
-# ============================================================
-# COMPATIBILITY FUNCTION
+# MAIN TTS FUNCTION
 # ============================================================
 
 def run_tts_to_file(
     text,
     voice_id,
-    pitch_offset=None,
+    pitch_offset="+0Hz",
     rate="+0%",
-    suffix="output",
-    tempo=1.0,
-    volume="+0%"
+    suffix="output"
 ):
-    """
-    Compatible with older app.py calls.
 
-    The selected voice preset controls
-    its own pitch/rate/effect.
-    """
+    # --------------------------------------------
+    # Find selected voice
+    # --------------------------------------------
 
-    selected = get_voice_by_id(
-        voice_id
-    )
+    selected = None
+
+    for (
+        voice,
+        default_pitch,
+        name,
+        label
+    ) in FEATURED_VOICES:
+
+        if name == voice_id:
+
+            selected = (
+                voice,
+                default_pitch,
+                name,
+                label
+            )
+
+            break
 
     if selected is None:
 
         raise ValueError(
-            f"Unknown voice ID: {voice_id}"
+            f"Voice not found: {voice_id}"
         )
 
-    # If old app sends a custom pitch,
-    # use it. Otherwise use preset pitch.
-    pitch = (
-        pitch_offset
-        if pitch_offset is not None
-        else selected["pitch"]
+    (
+        voice,
+        default_pitch,
+        name,
+        label
+    ) = selected
+
+
+    # --------------------------------------------
+    # Voice settings
+    # --------------------------------------------
+
+    settings = VOICE_SETTINGS.get(
+        name,
+        {
+            "rate": "+0%",
+            "effect": "None"
+        }
     )
 
-    # If old app sends custom rate,
-    # use it. Otherwise use preset rate.
-    actual_rate = (
-        rate
-        if rate != "+0%"
-        else selected["rate"]
+    # If app provides default values,
+    # use preset values for distinction.
+    actual_pitch = (
+        default_pitch
+        if pitch_offset == "+0Hz"
+        else pitch_offset
     )
+
+    actual_rate = (
+        settings["rate"]
+        if rate == "+0%"
+        else rate
+    )
+
+
+    # --------------------------------------------
+    # Temporary files
+    # --------------------------------------------
 
     raw_audio = Path(
         f"raw_{suffix}.mp3"
@@ -651,24 +585,55 @@ def run_tts_to_file(
         f"output_{suffix}.srt"
     )
 
-    _run_async(
+
+    # --------------------------------------------
+    # Generate Edge TTS
+    # --------------------------------------------
+
+    run_async(
         generate_tts(
             text=text,
-            voice=selected["voice"],
+            voice=voice,
             rate=actual_rate,
-            volume=volume,
-            pitch=pitch,
-            output_file=str(raw_audio),
-            sub_file=str(raw_srt)
+            volume="+0%",
+            pitch=actual_pitch,
+            output_file=str(
+                raw_audio
+            ),
+            sub_file=str(
+                raw_srt
+            )
         )
     )
 
-    processed = apply_effects(
+
+    # --------------------------------------------
+    # Apply effect
+    # --------------------------------------------
+
+    processed_audio = apply_effects(
         input_path=raw_audio,
-        effect_name=selected["effect"],
-        tempo=tempo,
-        output_name=final_audio.name
+        effect_name=settings["effect"],
+        tempo=1.0
     )
+
+
+    # --------------------------------------------
+    # Rename final audio
+    # --------------------------------------------
+
+    if final_audio.exists():
+
+        final_audio.unlink()
+
+    processed_audio.replace(
+        final_audio
+    )
+
+
+    # --------------------------------------------
+    # SRT
+    # --------------------------------------------
 
     if raw_srt.exists():
 
@@ -679,6 +644,11 @@ def run_tts_to_file(
             final_srt
         )
 
+
+    # --------------------------------------------
+    # Cleanup
+    # --------------------------------------------
+
     if raw_audio.exists():
 
         try:
@@ -686,79 +656,76 @@ def run_tts_to_file(
         except Exception:
             pass
 
+
     increment_usage()
 
+
     return (
-        processed,
+        final_audio,
         final_srt
     )
 
 
 # ============================================================
-# VOICE LIST FOR STREAMLIT
+# ALIAS
+# ============================================================
+
+def generate_voice(
+    text,
+    voice_id,
+    tempo=1.0,
+    suffix="voice"
+):
+
+    audio, srt = run_tts_to_file(
+        text=text,
+        voice_id=voice_id,
+        pitch_offset="+0Hz",
+        rate="+0%",
+        suffix=suffix
+    )
+
+    # Optional tempo adjustment
+    if tempo != 1.0:
+
+        tempo_audio = change_tempo(
+            audio,
+            tempo
+        )
+
+        if audio.exists():
+
+            audio.unlink()
+
+        tempo_audio.replace(
+            audio
+        )
+
+    return (
+        audio,
+        srt
+    )
+
+
+# ============================================================
+# VOICE LIST
 # ============================================================
 
 def get_voice_list():
 
     return [
         {
-            "id": voice["id"],
-            "name": voice["name"],
-            "display": voice["display"],
-            "voice": voice["voice"],
-            "pitch": voice["pitch"],
-            "rate": voice["rate"],
-            "effect": voice["effect"],
+            "id": name,
+            "name": name,
+            "display": label,
+            "voice": voice,
+            "pitch": pitch
         }
-        for voice in FEATURED_VOICES
+
+        for (
+            voice,
+            pitch,
+            name,
+            label
+        ) in FEATURED_VOICES
     ]
-
-
-# ============================================================
-# GET VOICE NAMES
-# ============================================================
-
-def get_voice_names():
-
-    return [
-        voice["name"]
-        for voice in FEATURED_VOICES
-    ]
-
-
-# ============================================================
-# TEST
-# ============================================================
-
-if __name__ == "__main__":
-
-    test_text = """
-    မင်္ဂလာပါ။
-    ဒါကတော့ Mg Khant AI Studio ရဲ့
-    မြန်မာ AI အသံစမ်းသပ်မှု ဖြစ်ပါတယ်။
-    """
-
-    try:
-
-        audio, srt = run_tts_to_file(
-            text=test_text,
-            voice_id="naytoe",
-            suffix="test"
-        )
-
-        print(
-            "Audio:",
-            audio
-        )
-
-        print(
-            "SRT:",
-            srt
-        )
-
-    except Exception as e:
-
-        print(
-            "ERROR:",
-            e
-        )
