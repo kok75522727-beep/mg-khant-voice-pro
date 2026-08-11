@@ -242,10 +242,12 @@ inject_custom_css()
 def b64_audio(path):
     data = path.read_bytes()
     b64 = base64.b64encode(data).decode()
-    return f'data:audio/mpeg;base64,{b64}'
+    mime = "audio/wav" if path.suffix.lower() == ".wav" else "audio/mpeg"
+    return f"data:{mime};base64,{b64}"
 
 def audio_player(path):
-    st.audio(b64_audio(path), format="audio/mp3")
+    audio_format = "audio/wav" if path.suffix.lower() == ".wav" else "audio/mp3"
+    st.audio(b64_audio(path), format=audio_format)
 
 def render_section(num, title):
     st.markdown(f"""
@@ -369,10 +371,10 @@ def tts_page():
             dl_col1, dl_col2 = st.columns(2)
             with dl_col1:
                 st.download_button(
-                    "⬇️ MP3 ဒေါင်းလုဒ်",
+                    "⬇️ အသံဖိုင် ဒေါင်းလုဒ်",
                     data=st.session_state.last_audio.read_bytes(),
-                    file_name="mgkhant_voice.mp3",
-                    mime="audio/mpeg",
+                    file_name=f"mgkhant_voice{st.session_state.last_audio.suffix}",
+                    mime="audio/wav" if st.session_state.last_audio.suffix.lower() == ".wav" else "audio/mpeg",
                     use_container_width=True
                 )
             with dl_col2:
