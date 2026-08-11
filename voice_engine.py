@@ -1,5 +1,4 @@
 import asyncio
-import html
 import json
 import os
 import re
@@ -206,60 +205,13 @@ def generate_elevenlabs_tts(text, slot, rate="+0%", volume="+0%", pitch="+0Hz"):
     return output_file, sub_file
 
 
-def generate_azure_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
-    """Generate multilingual speech through Azure Speech REST TTS."""
-    key = os.getenv("AZURE_SPEECH_KEY")
-    region = os.getenv("AZURE_SPEECH_REGION")
-    if not key or not region:
-        raise RuntimeError(
-            "Azure API key မတွေ့ပါ။ AZURE_SPEECH_KEY နှင့် AZURE_SPEECH_REGION ကို environment variable အဖြစ် ထည့်ပါ။"
-        )
-
-    # Azure SSML uses the same percentage/Hz notation used by the UI.
-    escaped_text = html.escape(text)
-    ssml = f'''<speak version="1.0" xml:lang="en-US">
-  <voice name="{html.escape(voice)}">
-    <prosody rate="{rate}" pitch="{pitch}" volume="{volume}">{escaped_text}</prosody>
-  </voice>
-</speak>'''
-
-    endpoint = (
-        f"https://{region}.tts.speech.microsoft.com/cognitiveservices/v1"
-    )
-    response = requests.post(
-        endpoint,
-        headers={
-            "Ocp-Apim-Subscription-Key": key,
-            "Content-Type": "application/ssml+xml",
-            "X-Microsoft-OutputFormat": "audio-24khz-160kbitrate-mono-mp3",
-            "User-Agent": "MgKhantVoiceSystem/1.0",
-        },
-        data=ssml.encode("utf-8"),
-        timeout=60,
-    )
-    if not response.ok:
-        raise RuntimeError(f"Azure TTS error {response.status_code}: {response.text[:300]}")
-
-    output_file = Path("output.mp3")
-    sub_file = Path("output.srt")
-    output_file.write_bytes(response.content)
-    # REST synthesis does not return Edge-style WordBoundary events here,
-    # so create a valid fallback subtitle cue for download.
-    write_segmented_srt(text, sub_file, get_audio_duration(output_file))
-    return output_file, sub_file
-
-
 def run_tts_to_file(text, voice_id, pitch_offset, rate="+0%", suffix="output"):
-    """Route Edge voices locally and Azure voices through the configured API."""
+    """Route the two Edge voices and eight ElevenLabs voices only."""
     if voice_id.startswith("eleven:"):
         audio_path, sub_path = generate_elevenlabs_tts(
             text, voice_id, rate=rate, pitch=pitch_offset
         )
-    elif voice_id.startswith("azure:"):
-        audio_path, sub_path = generate_azure_tts(
-            text, voice_id.removeprefix("azure:"), rate=rate, pitch=pitch_offset
-        )
-    else:
+    elif voice_id.startswith("edge:"):
         edge_voice = voice_id.removeprefix("edge:")
         loop = asyncio.new_event_loop()
         try:
@@ -269,6 +221,8 @@ def run_tts_to_file(text, voice_id, pitch_offset, rate="+0%", suffix="output"):
             )
         finally:
             loop.close()
+    else:
+        raise RuntimeError("မသိသော voice ID ဖြစ်ပါသည်။ Edge သို့မဟုတ် ElevenLabs voice ကို ရွေးပါ။")
 
     final_audio = Path(f"output_{suffix}.mp3")
     final_srt = Path(f"output_{suffix}.srt")
@@ -318,5 +272,4 @@ __all__ = [
     "run_tts_to_file",
     "apply_effects",
 ]
-
 
