@@ -182,23 +182,47 @@ def generate_google_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
     if not api_key:
         raise RuntimeError("GOOGLE_API_KEY ကို Streamlit Secrets ထဲ ထည့်ပါ။")
 
+    try:
+        rate_percent = float(str(rate).replace("%", "").replace("+", ""))
+    except ValueError:
+        rate_percent = 0.0
+    speed_multiplier = max(0.5, min(2.0, 1.0 + rate_percent / 100.0))
+    try:
+        pitch_value = float(str(pitch).replace("Hz", "").replace("+", ""))
+    except ValueError:
+        pitch_value = 0.0
+
+    speed_instruction = f"Speak at approximately {speed_multiplier:.2f}x speed."
+    if pitch_value > 0:
+        pitch_instruction = f"Use a slightly higher pitch, about {abs(pitch_value):.0f} percent above normal."
+    elif pitch_value < 0:
+        pitch_instruction = f"Use a slightly lower pitch, about {abs(pitch_value):.0f} percent below normal."
+    else:
+        pitch_instruction = "Use a natural, normal pitch."
+    tts_prompt = (
+        "Read the following text aloud exactly as written. "
+        f"{speed_instruction} {pitch_instruction} "
+        "Do not translate, summarize, add, or remove words.\n\n"
+        f"Text:\n{text}"
+    )
+
     endpoint = (
         "https://generativelanguage.googleapis.com/v1beta/"
-        "models/gemini-2.5-flash-preview-tts:generateContent"
+        "models/gemini-3.1-flash-tts-preview:generateContent"
     )
     response = requests.post(
         endpoint,
         headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
         json={
-            "contents": [{"parts": [{"text": text}]}],
+            "contents": [{"parts": [{"text": tts_prompt}]}],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
                 "speechConfig": {
                     "voiceConfig": {
                         "prebuiltVoiceConfig": {"voiceName": voice_name}
                     }
-                },
-            },
+                }
+            }
         },
         timeout=120,
     )
@@ -207,9 +231,23 @@ def generate_google_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
 
     payload = response.json()
     try:
-        part = payload["candidates"][0]["content"]["parts"][0]
-        inline_data = part.get("inlineData", part.get("inline_data", {}))
+        candidates = payload.get("candidates") or []
+        candidate = candidates[0]
+        parts = (candidate.get("content") or {}).get("parts") or []
+        part = next(
+            (item for item in parts if item.get("inlineData") or item.get("inline_data")),
+            None,
+        )
+        if not part:
+            reason = candidate.get("finishReason", "unknown")
+            raise RuntimeError(
+                f"Google TTS က audio မပြန်ပါ။ finishReason={reason}. "
+                "စာသားကို တိုတောင်းအောင် ပြန်စမ်းပါ သို့မဟုတ် Gemini TTS model access ကို စစ်ပါ။"
+            )
+        inline_data = part.get("inlineData") or part.get("inline_data") or {}
         pcm_bytes = base64.b64decode(inline_data["data"])
+    except RuntimeError:
+        raise
     except (KeyError, IndexError, TypeError, ValueError) as exc:
         raise RuntimeError(f"Google TTS audio response မရပါ: {payload}") from exc
 
@@ -287,5 +325,4 @@ __all__ = [
     "run_tts_to_file",
     "apply_effects",
 ]
-
 
