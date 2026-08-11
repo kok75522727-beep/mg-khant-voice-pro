@@ -286,7 +286,12 @@ def tts_page():
         )
         
         render_section("2", "အသံအမျိုးအစား ရွေးချယ်ခြင်း")
-        voice_options = [name for _, _, name, label in FEATURED_VOICES[:10]]
+        # Keep the visible UI names explicit so old cached voice labels cannot reappear.
+        voice_options = [
+            "Thiha", "Nilar",
+            "ကိုဇင်မင်း", "ကိုထက်အောင်", "ကိုရဲမင်း", "ကိုသီဟ",
+            "မေသက်", "သဇင်", "နွယ်နွယ်", "အိမ့်ချစ်",
+        ]
         selected_voice_str = st.radio(
             "အသံရွေးပါ",
             options=voice_options,
