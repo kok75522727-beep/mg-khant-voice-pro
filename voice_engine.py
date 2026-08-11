@@ -1,7 +1,9 @@
 import asyncio
+import base64
 import json
 import os
 import re
+import wave
 import shutil
 import subprocess
 from pathlib import Path
@@ -22,14 +24,14 @@ except ImportError:
 FEATURED_VOICES = [
     ("edge:my-MM-ThihaNeural", "+0Hz", "Thiha", "မြန်မာအသံ (Thiha)"),
     ("edge:my-MM-NilarNeural", "+0Hz", "Nilar", "မြန်မာအသံ (Nilar)"),
-    ("eleven:1", "+0Hz", "ကိုဇင်မင်း", "မင်းသား Voice 1"),
-    ("eleven:2", "+0Hz", "ကိုထက်အောင်", "မင်းသား Voice 2"),
-    ("eleven:3", "+0Hz", "ကိုရဲမင်း", "မင်းသား Voice 3"),
-    ("eleven:4", "+0Hz", "ကိုသီဟ", "မင်းသား Voice 4"),
-    ("eleven:5", "+0Hz", "မေသက်", "မင်းသမီး Voice 1"),
-    ("eleven:6", "+0Hz", "သဇင်", "မင်းသမီး Voice 2"),
-    ("eleven:7", "+0Hz", "နွယ်နွယ်", "မင်းသမီး Voice 3"),
-    ("eleven:8", "+0Hz", "အိမ့်ချစ်", "မင်းသမီး Voice 4"),
+    ("google:Kore", "+0Hz", "ကိုဇင်မင်း", "Google Voice 1 (Kore)"),
+    ("google:Puck", "+0Hz", "ကိုထက်အောင်", "Google Voice 2 (Puck)"),
+    ("google:Charon", "+0Hz", "ကိုရဲမင်း", "Google Voice 3 (Charon)"),
+    ("google:Fenrir", "+0Hz", "ကိုသီဟ", "Google Voice 4 (Fenrir)"),
+    ("google:Aoede", "+0Hz", "မေသက်", "Google Voice 5 (Aoede)"),
+    ("google:Leda", "+0Hz", "သဇင်", "Google Voice 6 (Leda)"),
+    ("google:Orus", "+0Hz", "နွယ်နွယ်", "Google Voice 7 (Orus)"),
+    ("google:Zephyr", "+0Hz", "အိမ့်ချစ်", "Google Voice 8 (Zephyr)"),
 ]
 
 EFFECTS = {
@@ -164,51 +166,64 @@ def _secret_value(name):
         return None
 
 
-def generate_elevenlabs_tts(text, slot, rate="+0%", volume="+0%", pitch="+0Hz"):
-    """Generate one of the eight configured ElevenLabs voices."""
-    api_key = _secret_value("ELEVENLABS_API_KEY")
-    slot_number = slot.rsplit(":", 1)[-1]
-    voice_id = _secret_value(f"ELEVENLABS_VOICE_ID_{slot_number}")
-    if not api_key:
-        raise RuntimeError("ELEVENLABS_API_KEY ကို Streamlit Secrets ထဲ ထည့်ပါ။")
-    if not voice_id:
-        raise RuntimeError(f"ELEVENLABS_VOICE_ID_{slot_number} မတွေ့ပါ။ ElevenLabs voice ID ထည့်ပါ။")
+def _write_pcm_wav(output_file, pcm_bytes, sample_rate=24000, channels=1, sample_width=2):
+    """Wrap Gemini's 24 kHz PCM response in a playable WAV container."""
+    with wave.open(str(output_file), "wb") as wav_file:
+        wav_file.setnchannels(channels)
+        wav_file.setsampwidth(sample_width)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(pcm_bytes)
 
-    try:
-        rate_value = float(str(rate).replace("%", "").replace("+", ""))
-    except ValueError:
-        rate_value = 0.0
-    speed = max(0.7, min(1.2, 1.0 + rate_value / 100.0))
+
+def generate_google_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
+    """Generate one of eight Gemini TTS preset voices through Google AI Studio."""
+    api_key = _secret_value("GOOGLE_API_KEY") or _secret_value("GEMINI_API_KEY")
+    voice_name = voice.rsplit(":", 1)[-1]
+    if not api_key:
+        raise RuntimeError("GOOGLE_API_KEY ကို Streamlit Secrets ထဲ ထည့်ပါ။")
+
+    endpoint = (
+        "https://generativelanguage.googleapis.com/v1beta/"
+        "models/gemini-2.5-flash-preview-tts:generateContent"
+    )
     response = requests.post(
-        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
-        headers={"xi-api-key": api_key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
+        endpoint,
+        headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
         json={
-            "text": text,
-            "model_id": "eleven_multilingual_v2",
-            "voice_settings": {
-                "stability": 0.5,
-                "similarity_boost": 0.75,
-                "style": 0.0,
-                "use_speaker_boost": True,
-                "speed": speed,
+            "contents": [{"parts": [{"text": text}]}],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {
+                    "voiceConfig": {
+                        "prebuiltVoiceConfig": {"voiceName": voice_name}
+                    }
+                },
             },
         },
         timeout=120,
     )
     if not response.ok:
-        raise RuntimeError(f"ElevenLabs TTS error {response.status_code}: {response.text[:300]}")
+        raise RuntimeError(f"Google Gemini TTS error {response.status_code}: {response.text[:400]}")
 
-    output_file = Path("output.mp3")
+    payload = response.json()
+    try:
+        part = payload["candidates"][0]["content"]["parts"][0]
+        inline_data = part.get("inlineData", part.get("inline_data", {}))
+        pcm_bytes = base64.b64decode(inline_data["data"])
+    except (KeyError, IndexError, TypeError, ValueError) as exc:
+        raise RuntimeError(f"Google TTS audio response မရပါ: {payload}") from exc
+
+    output_file = Path("output.wav")
     sub_file = Path("output.srt")
-    output_file.write_bytes(response.content)
+    _write_pcm_wav(output_file, pcm_bytes)
     write_segmented_srt(text, sub_file, get_audio_duration(output_file))
     return output_file, sub_file
 
 
 def run_tts_to_file(text, voice_id, pitch_offset, rate="+0%", suffix="output"):
-    """Route the two Edge voices and eight ElevenLabs voices only."""
-    if voice_id.startswith("eleven:"):
-        audio_path, sub_path = generate_elevenlabs_tts(
+    """Route the two Edge voices and eight Google Gemini TTS voices."""
+    if voice_id.startswith("google:"):
+        audio_path, sub_path = generate_google_tts(
             text, voice_id, rate=rate, pitch=pitch_offset
         )
     elif voice_id.startswith("edge:"):
@@ -224,7 +239,7 @@ def run_tts_to_file(text, voice_id, pitch_offset, rate="+0%", suffix="output"):
     else:
         raise RuntimeError("မသိသော voice ID ဖြစ်ပါသည်။ Edge သို့မဟုတ် ElevenLabs voice ကို ရွေးပါ။")
 
-    final_audio = Path(f"output_{suffix}.mp3")
+    final_audio = Path(f"output_{suffix}{audio_path.suffix}")
     final_srt = Path(f"output_{suffix}.srt")
     shutil.copyfile(audio_path, final_audio)
     shutil.copyfile(sub_path, final_srt)
@@ -272,4 +287,5 @@ __all__ = [
     "run_tts_to_file",
     "apply_effects",
 ]
+
 
