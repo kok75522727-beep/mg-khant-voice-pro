@@ -17,20 +17,20 @@ except ImportError:
 
 # ---------------------------------------------------------------------------
 # Voice list: first two are the existing Myanmar Edge voices; the next eight
-# are Azure multilingual voices. The names shown in the UI are labels only.
+# are ElevenLabs voice slots. The names shown in the UI are labels only.
 # ---------------------------------------------------------------------------
 
 FEATURED_VOICES = [
     ("edge:my-MM-ThihaNeural", "+0Hz", "Thiha", "မြန်မာအသံ (Thiha)"),
     ("edge:my-MM-NilarNeural", "+0Hz", "Nilar", "မြန်မာအသံ (Nilar)"),
-    ("azure:en-US-AvaMultilingualNeural", "+0Hz", "Ava", "Azure Multilingual"),
-    ("azure:en-US-AndrewMultilingualNeural", "+0Hz", "Andrew", "Azure Multilingual"),
-    ("azure:en-US-BrianMultilingualNeural", "+0Hz", "Brian", "Azure Multilingual"),
-    ("azure:en-US-EmmaMultilingualNeural", "+0Hz", "Emma", "Azure Multilingual"),
-    ("azure:fr-FR-VivienneMultilingualNeural", "+0Hz", "Vivienne", "Azure Multilingual"),
-    ("azure:fr-FR-RemyMultilingualNeural", "+0Hz", "Remy", "Azure Multilingual"),
-    ("azure:de-DE-SeraphinaMultilingualNeural", "+0Hz", "Seraphina", "Azure Multilingual"),
-    ("azure:de-DE-FlorianMultilingualNeural", "+0Hz", "Florian", "Azure Multilingual"),
+    ("eleven:1", "+0Hz", "ကိုဇင်မင်း", "မင်းသား Voice 1"),
+    ("eleven:2", "+0Hz", "ကိုထက်အောင်", "မင်းသား Voice 2"),
+    ("eleven:3", "+0Hz", "ကိုရဲမင်း", "မင်းသား Voice 3"),
+    ("eleven:4", "+0Hz", "ကိုသီဟ", "မင်းသား Voice 4"),
+    ("eleven:5", "+0Hz", "မေသက်", "မင်းသမီး Voice 1"),
+    ("eleven:6", "+0Hz", "သဇင်", "မင်းသမီး Voice 2"),
+    ("eleven:7", "+0Hz", "နွယ်နွယ်", "မင်းသမီး Voice 3"),
+    ("eleven:8", "+0Hz", "အိမ့်ချစ်", "မင်းသမီး Voice 4"),
 ]
 
 EFFECTS = {
@@ -154,6 +154,58 @@ async def generate_edge_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz")
     return output_file, sub_file
 
 
+def _secret_value(name):
+    value = os.getenv(name)
+    if value:
+        return value
+    try:
+        import streamlit as st
+        return st.secrets.get(name)
+    except Exception:
+        return None
+
+
+def generate_elevenlabs_tts(text, slot, rate="+0%", volume="+0%", pitch="+0Hz"):
+    """Generate one of the eight configured ElevenLabs voices."""
+    api_key = _secret_value("ELEVENLABS_API_KEY")
+    slot_number = slot.rsplit(":", 1)[-1]
+    voice_id = _secret_value(f"ELEVENLABS_VOICE_ID_{slot_number}")
+    if not api_key:
+        raise RuntimeError("ELEVENLABS_API_KEY ကို Streamlit Secrets ထဲ ထည့်ပါ။")
+    if not voice_id:
+        raise RuntimeError(f"ELEVENLABS_VOICE_ID_{slot_number} မတွေ့ပါ။ ElevenLabs voice ID ထည့်ပါ။")
+
+    try:
+        rate_value = float(str(rate).replace("%", "").replace("+", ""))
+    except ValueError:
+        rate_value = 0.0
+    speed = max(0.7, min(1.2, 1.0 + rate_value / 100.0))
+    response = requests.post(
+        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+        headers={"xi-api-key": api_key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
+        json={
+            "text": text,
+            "model_id": "eleven_multilingual_v2",
+            "voice_settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.75,
+                "style": 0.0,
+                "use_speaker_boost": True,
+                "speed": speed,
+            },
+        },
+        timeout=120,
+    )
+    if not response.ok:
+        raise RuntimeError(f"ElevenLabs TTS error {response.status_code}: {response.text[:300]}")
+
+    output_file = Path("output.mp3")
+    sub_file = Path("output.srt")
+    output_file.write_bytes(response.content)
+    write_segmented_srt(text, sub_file, get_audio_duration(output_file))
+    return output_file, sub_file
+
+
 def generate_azure_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
     """Generate multilingual speech through Azure Speech REST TTS."""
     key = os.getenv("AZURE_SPEECH_KEY")
@@ -199,7 +251,11 @@ def generate_azure_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
 
 def run_tts_to_file(text, voice_id, pitch_offset, rate="+0%", suffix="output"):
     """Route Edge voices locally and Azure voices through the configured API."""
-    if voice_id.startswith("azure:"):
+    if voice_id.startswith("eleven:"):
+        audio_path, sub_path = generate_elevenlabs_tts(
+            text, voice_id, rate=rate, pitch=pitch_offset
+        )
+    elif voice_id.startswith("azure:"):
         audio_path, sub_path = generate_azure_tts(
             text, voice_id.removeprefix("azure:"), rate=rate, pitch=pitch_offset
         )
@@ -262,4 +318,5 @@ __all__ = [
     "run_tts_to_file",
     "apply_effects",
 ]
+
 
