@@ -82,13 +82,53 @@ def _srt_time(seconds):
 
 
 def get_audio_duration(audio_path):
-    """Return the exact MP3 duration when mutagen is installed."""
+    """Return the exact duration for MP3 or WAV audio."""
+    path = Path(audio_path)
+    if path.suffix.lower() == ".wav":
+        try:
+            with wave.open(str(path), "rb") as wav_file:
+                return wav_file.getnframes() / float(wav_file.getframerate())
+        except Exception:
+            return None
     if MP3 is None:
         return None
     try:
-        return float(MP3(str(audio_path)).info.length)
+        return float(MP3(str(path)).info.length)
     except Exception:
         return None
+
+
+def split_tts_chunks(text, max_chars=420):
+    """Split long text into safe TTS requests while preserving reading order."""
+    clean_text = re.sub(r"\s+", " ", str(text).replace("\r", "")).strip()
+    if not clean_text:
+        return ["အသံဖိုင်"]
+    chunks = []
+    remaining = clean_text
+    punctuation = "။!?！？,၊;:"
+    while len(remaining) > max_chars:
+        window = remaining[: max_chars + 1]
+        cut = max((window.rfind(mark) for mark in punctuation), default=-1)
+        if cut < max_chars // 2:
+            cut = window.rfind(" ")
+        if cut < max_chars // 2:
+            cut = max_chars
+        else:
+            cut += 1
+        chunks.append(remaining[:cut].strip())
+        remaining = remaining[cut:].lstrip()
+    if remaining:
+        chunks.append(remaining)
+    return chunks
+
+
+def _strip_id3(mp3_bytes):
+    """Remove an ID3v2 header so MP3 chunks can be joined as one stream."""
+    if not mp3_bytes.startswith(b"ID3") or len(mp3_bytes) < 10:
+        return mp3_bytes
+    size_bytes = mp3_bytes[6:10]
+    size = ((size_bytes[0] & 0x7F) << 21) | ((size_bytes[1] & 0x7F) << 14) | ((size_bytes[2] & 0x7F) << 7) | (size_bytes[3] & 0x7F)
+    return mp3_bytes[10 + size:]
 
 
 def write_segmented_srt(text, output_path, duration_seconds=None):
@@ -137,21 +177,23 @@ def get_usage_count():
 
 
 async def generate_edge_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
-    """Generate audio and SRT using the existing Edge TTS Myanmar voices."""
-    communicate = edge_tts.Communicate(text, voice, rate=rate, volume=volume, pitch=pitch)
+    """Generate long Burmese text in safe sequential Edge TTS chunks."""
     output_file = Path("output.mp3")
     sub_file = Path("output.srt")
-    submaker = edge_tts.SubMaker()
+    with output_file.open("wb") as output:
+        for chunk_text in split_tts_chunks(text, max_chars=420):
+            communicate = edge_tts.Communicate(
+                chunk_text, voice, rate=rate, volume=volume, pitch=pitch
+            )
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio_bytes = chunk["data"]
+                    if output.tell() > 0:
+                        audio_bytes = _strip_id3(audio_bytes)
+                    output.write(audio_bytes)
 
-    with output_file.open("wb") as f:
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                f.write(chunk["data"])
-            elif chunk["type"] == "WordBoundary":
-                submaker.feed(chunk)
-
-    # Use the real MP3 duration so the final SRT timestamp matches the audio.
-    write_segmented_srt(text, sub_file, get_audio_duration(output_file))
+    duration = get_audio_duration(output_file)
+    write_segmented_srt(text, sub_file, duration)
     return output_file, sub_file
 
 
@@ -175,23 +217,8 @@ def _write_pcm_wav(output_file, pcm_bytes, sample_rate=24000, channels=1, sample
         wav_file.writeframes(pcm_bytes)
 
 
-def generate_google_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
-    """Generate one of eight Gemini TTS preset voices through Google AI Studio."""
-    api_key = _secret_value("GOOGLE_API_KEY") or _secret_value("GEMINI_API_KEY")
-    voice_name = voice.rsplit(":", 1)[-1]
-    if not api_key:
-        raise RuntimeError("GOOGLE_API_KEY ကို Streamlit Secrets ထဲ ထည့်ပါ။")
-
-    try:
-        rate_percent = float(str(rate).replace("%", "").replace("+", ""))
-    except ValueError:
-        rate_percent = 0.0
-    speed_multiplier = max(0.5, min(2.0, 1.0 + rate_percent / 100.0))
-    try:
-        pitch_value = float(str(pitch).replace("Hz", "").replace("+", ""))
-    except ValueError:
-        pitch_value = 0.0
-
+def _request_google_pcm(text, voice_name, api_key, speed_multiplier, pitch_value):
+    """Request one safe-sized Gemini TTS chunk and return raw PCM bytes."""
     speed_instruction = f"Speak at approximately {speed_multiplier:.2f}x speed."
     if pitch_value > 0:
         pitch_instruction = f"Use a slightly higher pitch, about {abs(pitch_value):.0f} percent above normal."
@@ -205,7 +232,6 @@ def generate_google_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
         "Do not translate, summarize, add, or remove words.\n\n"
         f"Text:\n{text}"
     )
-
     endpoint = (
         "https://generativelanguage.googleapis.com/v1beta/"
         "models/gemini-3.1-flash-tts-preview:generateContent"
@@ -218,39 +244,49 @@ def generate_google_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
                 "speechConfig": {
-                    "voiceConfig": {
-                        "prebuiltVoiceConfig": {"voiceName": voice_name}
-                    }
-                }
-            }
+                    "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice_name}}
+                },
+            },
         },
         timeout=120,
     )
     if not response.ok:
         raise RuntimeError(f"Google Gemini TTS error {response.status_code}: {response.text[:400]}")
-
     payload = response.json()
     try:
-        candidates = payload.get("candidates") or []
-        candidate = candidates[0]
+        candidate = (payload.get("candidates") or [])[0]
         parts = (candidate.get("content") or {}).get("parts") or []
-        part = next(
-            (item for item in parts if item.get("inlineData") or item.get("inline_data")),
-            None,
-        )
+        part = next((item for item in parts if item.get("inlineData") or item.get("inline_data")), None)
         if not part:
             reason = candidate.get("finishReason", "unknown")
-            raise RuntimeError(
-                f"Google TTS က audio မပြန်ပါ။ finishReason={reason}. "
-                "စာသားကို တိုတောင်းအောင် ပြန်စမ်းပါ သို့မဟုတ် Gemini TTS model access ကို စစ်ပါ။"
-            )
+            raise RuntimeError(f"Google TTS audio မပြန်ပါ။ finishReason={reason}.")
         inline_data = part.get("inlineData") or part.get("inline_data") or {}
-        pcm_bytes = base64.b64decode(inline_data["data"])
+        return base64.b64decode(inline_data["data"])
     except RuntimeError:
         raise
     except (KeyError, IndexError, TypeError, ValueError) as exc:
         raise RuntimeError(f"Google TTS audio response မရပါ: {payload}") from exc
 
+
+def generate_google_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
+    """Generate Google Gemini TTS as a single request; long-text chunking is Edge-only."""
+    api_key = _secret_value("GOOGLE_API_KEY") or _secret_value("GEMINI_API_KEY")
+    voice_name = voice.rsplit(":", 1)[-1]
+    if not api_key:
+        raise RuntimeError("GOOGLE_API_KEY ကို Streamlit Secrets ထဲ ထည့်ပါ။")
+    try:
+        rate_percent = float(str(rate).replace("%", "").replace("+", ""))
+    except ValueError:
+        rate_percent = 0.0
+    speed_multiplier = max(0.5, min(2.0, 1.0 + rate_percent / 100.0))
+    try:
+        pitch_value = float(str(pitch).replace("Hz", "").replace("+", ""))
+    except ValueError:
+        pitch_value = 0.0
+
+    pcm_bytes = _request_google_pcm(
+        text, voice_name, api_key, speed_multiplier, pitch_value
+    )
     output_file = Path("output.wav")
     sub_file = Path("output.srt")
     _write_pcm_wav(output_file, pcm_bytes)
