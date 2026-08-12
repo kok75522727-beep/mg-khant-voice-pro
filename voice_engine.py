@@ -199,7 +199,7 @@ async def generate_edge_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz")
 
         manifest = temp_path / "concat.txt"
         manifest.write_text(
-            "".join(f"file '{path.as_posix()}'\\n" for path in chunk_files),
+            "".join(f"file '{path.as_posix()}'\n" for path in chunk_files),
             encoding="utf-8",
         )
         try:
