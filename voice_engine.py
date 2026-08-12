@@ -197,17 +197,34 @@ async def generate_edge_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz")
                 raise RuntimeError(f"Edge TTS chunk {index + 1} ဗလာဖြစ်နေပါသည်။")
             chunk_files.append(chunk_file)
 
+        silence_file = temp_path / "join_silence.mp3"
         manifest = temp_path / "concat.txt"
-        manifest.write_text(
-            "".join(f"file '{path.as_posix()}'\n" for path in chunk_files),
-            encoding="utf-8",
-        )
         try:
             subprocess.run(
                 [
                     "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                    "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
+                    "-t", "0.06", "-c:a", "libmp3lame", "-q:a", "9",
+                    str(silence_file),
+                ],
+                check=True,
+                capture_output=True,
+            )
+            concat_files = []
+            for index, chunk_file in enumerate(chunk_files):
+                concat_files.append(chunk_file)
+                if index < len(chunk_files) - 1:
+                    concat_files.append(silence_file)
+            manifest.write_text(
+                "".join(f"file '{path.as_posix()}'\n" for path in concat_files),
+                encoding="utf-8",
+            )
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
                     "-f", "concat", "-safe", "0", "-i", str(manifest),
-                    "-c", "copy", str(output_file),
+                    "-af", "aresample=async=1:first_pts=0",
+                    "-c:a", "libmp3lame", "-q:a", "2", str(output_file),
                 ],
                 check=True,
                 capture_output=True,
@@ -391,4 +408,5 @@ __all__ = [
     "run_tts_to_file",
     "apply_effects",
 ]
+
 
