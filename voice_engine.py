@@ -6,6 +6,7 @@ import re
 import wave
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import edge_tts
@@ -177,22 +178,51 @@ def get_usage_count():
 
 
 async def generate_edge_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
-    """Generate long Burmese text in safe sequential Edge TTS chunks."""
+    """Generate Thiha/Nilar long text and join complete MP3 chunks reliably."""
     output_file = Path("output.mp3")
     sub_file = Path("output.srt")
-    with output_file.open("wb") as output:
-        for chunk_text in split_tts_chunks(text, max_chars=420):
+    with tempfile.TemporaryDirectory(prefix="mgkhant_edge_") as temp_dir:
+        temp_path = Path(temp_dir)
+        chunk_files = []
+        for index, chunk_text in enumerate(split_tts_chunks(text, max_chars=420)):
+            chunk_file = temp_path / f"chunk_{index:04d}.mp3"
             communicate = edge_tts.Communicate(
                 chunk_text, voice, rate=rate, volume=volume, pitch=pitch
             )
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    audio_bytes = chunk["data"]
-                    if output.tell() > 0:
-                        audio_bytes = _strip_id3(audio_bytes)
-                    output.write(audio_bytes)
+            with chunk_file.open("wb") as chunk_output:
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        chunk_output.write(chunk["data"])
+            if not chunk_file.exists() or chunk_file.stat().st_size < 100:
+                raise RuntimeError(f"Edge TTS chunk {index + 1} ဗလာဖြစ်နေပါသည်။")
+            chunk_files.append(chunk_file)
+
+        manifest = temp_path / "concat.txt"
+        manifest.write_text(
+            "".join(f"file '{path.as_posix()}'\\n" for path in chunk_files),
+            encoding="utf-8",
+        )
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                    "-f", "concat", "-safe", "0", "-i", str(manifest),
+                    "-c", "copy", str(output_file),
+                ],
+                check=True,
+                capture_output=True,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                "ffmpeg မတွေ့ပါ။ Streamlit Cloud repository ထဲမှာ packages.txt ဖိုင်နဲ့ ffmpeg ထည့်ပါ။"
+            ) from exc
+        except subprocess.CalledProcessError as exc:
+            detail = exc.stderr.decode("utf-8", errors="replace")[-500:]
+            raise RuntimeError(f"MP3 အပိုင်းများပေါင်းရာတွင် အမှား: {detail}") from exc
 
     duration = get_audio_duration(output_file)
+    if not duration or duration <= 0:
+        raise RuntimeError("ပေါင်းပြီးသော Edge audio duration မရပါ။")
     write_segmented_srt(text, sub_file, duration)
     return output_file, sub_file
 
