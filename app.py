@@ -400,14 +400,24 @@ def tts_page():
                     error_text = str(e)
                     # Google quota exhaustion normally returns HTTP 429. Forget
                     # the session key and show the key field again for a new key.
+                    error_lower = error_text.lower()
                     quota_exhausted = (
                         voice_id.startswith("google:")
-                        and ("429" in error_text or "quota" in error_text.lower() or "resource_exhausted" in error_text.lower())
+                        and ("429" in error_text or "quota" in error_lower or "resource_exhausted" in error_lower)
+                    )
+                    project_denied = (
+                        voice_id.startswith("google:")
+                        and ("403" in error_text or "permission_denied" in error_lower or "denied access" in error_lower)
                     )
                     if quota_exhausted:
                         st.session_state.pop("saved_google_api_key", None)
                         st.session_state["reset_google_key_input"] = True
                         st.warning("⚠️ ဒီ API Key ရဲ့ Google quota/Limit ပြည့်သွားပါပြီ။ Key အသစ်ထည့်ရန် Key box ပြန်ပေါ်လာပါမည်။")
+                        st.rerun()
+                    if project_denied:
+                        st.session_state.pop("saved_google_api_key", None)
+                        st.session_state["reset_google_key_input"] = True
+                        st.error("❌ ဒီ API Key ရဲ့ Google Project ကို Access Denied လုပ်ထားပါသည်။ Project အသစ်ဖန်တီးပြီး API Key အသစ်ယူပါ။ Key box ပြန်ပေါ်လာပါမည်။")
                         st.rerun()
                     st.error(f"❌ အမှားအယွင်း ဖြစ်ပေါ်သည်: {error_text}")
 
