@@ -7,8 +7,8 @@ from pathlib import Path
 import json
 
 from voice_engine import (
-    FEATURED_VOICES, EFFECTS, 
-    change_tempo, get_usage_count, run_tts_to_file, apply_effects
+    FEATURED_VOICES,
+    change_tempo, get_usage_count, run_tts_to_file
 )
 
 # ---------------------------------------------------------------------------
@@ -304,6 +304,20 @@ def tts_page():
         selected_idx = voice_options.index(selected_voice_str)
         voice_id, pitch_offset, name, label = FEATURED_VOICES[:10][selected_idx]
 
+        # Only the eight Google voices need a key. The password input masks it
+        # and the value is passed to the engine for this session's request.
+        google_api_key = None
+        if voice_id.startswith("google:"):
+            google_api_key = st.text_input(
+                "🔑 Google AI Studio API Key (Premium အသံ ၈ ခုအတွက်)",
+                type="password",
+                placeholder="AIza... သင်၏ API Key ကို ဒီမှာထည့်ပါ",
+                help="Key ကို မျှဝေမထားပါနှင့်။ Premium Google voice ၈ ခုအတွက်သာ အသုံးပြုပါမည်။",
+            ).strip()
+            st.caption("Thiha နှင့် Nilar သည် Key မလိုသော free voice များဖြစ်သည်။ Premium အသံ ၈ ခုအတွက် ကိုယ်ပိုင် Google AI Studio API Key ထည့်ပါ။")
+            if not google_api_key:
+                st.info("Google voice သုံးရန် API Key ထည့်ပါ။ App Secrets တွင် key ရှိပါက ထို key ကို fallback အဖြစ် အလိုအလျောက် သုံးပါမည်။")
+
         col_speed, col_pitch = st.columns(2)
         with col_speed:
             render_section("3", "အလျင် (Speed)")
@@ -353,7 +367,8 @@ def tts_page():
                         voice_id,
                         pitch_str,
                         rate=rate_str,
-                        suffix="custom"
+                        suffix="custom",
+                        api_key=google_api_key if voice_id.startswith("google:") else None,
                     )
                     
                     st.session_state.last_audio = audio_path
@@ -388,64 +403,6 @@ def tts_page():
                     )
 
 # ---------------------------------------------------------------------------
-# Effects Page
-# ---------------------------------------------------------------------------
-
-def effects_page():
-    with st.container(border=True):
-        st.markdown("### 🎚️ အသံဖိုင် Effect ပြောင်းလဲခြင်း")
-        st.markdown("သင်၏ မူရင်းအသံဖိုင် (MP3, WAV, OGG, M4A) ကို တင်ပြီး Effect အမျိုးမျိုး ထည့်သွင်းနိုင်ပါသည်။")
-        
-        uploaded = st.file_uploader(
-            "Audio ဖိုင်တင်ရန်",
-            type=["mp3", "wav", "ogg", "m4a"],
-            key="audio_uploader",
-        )
-        
-        if uploaded is not None:
-            st.session_state.uploaded_name = uploaded.name
-            st.session_state.uploaded_data = uploaded.read()
-        
-        if "uploaded_data" in st.session_state and st.session_state.uploaded_data:
-            audio_data = st.session_state.uploaded_data
-            input_path = Path(f"/tmp/upload_{st.session_state.uploaded_name}")
-            with open(input_path, "wb") as f:
-                f.write(audio_data)
-            
-            st.markdown("#### 🎵 မူရင်းအသံဖိုင်")
-            audio_player(input_path)
-            
-            col_eff1, col_eff2 = st.columns(2)
-            with col_eff1:
-                effect = st.selectbox("Effect အမျိုးအစား ရွေးပါ", list(EFFECTS.keys()))
-            with col_eff2:
-                extra_tempo = st.slider("အမြန်နှုန်း ညှိရန်", 0.5, 2.0, 1.0, 0.05)
-            
-            convert_clicked = st.button("✨ Effect စတင်ပြောင်းမည်", type="primary", use_container_width=True)
-            
-            if convert_clicked:
-                with st.spinner("⏳ Effect ထည့်သွင်းနေပါသည်..."):
-                    try:
-                        out_path = apply_effects(input_path, effect, tempo=extra_tempo)
-                        st.session_state.effect_audio = out_path
-                        st.session_state.effect_name = effect
-                        st.success("✅ Effect ပြောင်းလဲခြင်း ပြီးစီးပါပြီ။")
-                    except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
-            
-            if "effect_audio" in st.session_state:
-                st.markdown("---")
-                st.markdown(f"#### 🎧 ရလဒ် ({st.session_state.effect_name})")
-                audio_player(st.session_state.effect_audio)
-                st.download_button(
-                    "⬇️ Effect ပါအသံ ဒေါင်းလုဒ်ရန်",
-                    data=st.session_state.effect_audio.read_bytes(),
-                    file_name=f"effect_{st.session_state.effect_name}.mp3",
-                    mime="audio/mpeg",
-                    use_container_width=True
-                )
-
-# ---------------------------------------------------------------------------
 # Admin Page
 # ---------------------------------------------------------------------------
 
@@ -471,28 +428,6 @@ def admin_page():
             st.error("❌ Password မှားယွင်းနေပါသည်။")
 
 # ---------------------------------------------------------------------------
-# About Page
-# ---------------------------------------------------------------------------
-
-def about_page():
-    with st.container(border=True):
-        st.markdown("""
-        ### ℹ️ App အကြောင်းအရာ
-        
-        **Mg Khant အသံပြောင်းစနစ် Pro** သည် အဆင့်မြင့် Neural Voice Engine များကို အသုံးပြု၍ မြန်မာနှင့် အင်္ဂလိပ်စာသားများကို သဘာဝကျကျ အသံထွက်ဖန်တီးပေးသော Web Application ဖြစ်ပါသည်။
-        
-        #### ✨ အဓိက အင်္ဂါရပ်များ
-        - 🎙️ **အသံ ၁၀ မျိုး** (Celebrity & Neural Voices)
-        - ⚡ **Speed & Pitch Control** (အသံအလျင်နှင့် အမြင့် အလွယ်တူညှိရန်)
-        - 🎚️ **Professional Audio Effects** (အသံအမျိုးမျိုး ပြောင်းလဲနိုင်ခြင်း)
-        - 📄 **SRT Subtitle Export** (ဗီဒီယိုအတွက် စာတန်းထိုးဖိုင် ထုတ်ယူနိုင်ခြင်း)
-        - 📊 **Admin Dashboard** (အသုံးပြုမှု စာရင်းများ ကြည့်ရှုနိုင်ခြင်း)
-        
-        ---
-        📱 **Official Telegram Channel/Group**: [Mg Khant Group](https://t.me/fruitworld23)
-        """)
-
-# ---------------------------------------------------------------------------
 # Main Router
 # ---------------------------------------------------------------------------
 
@@ -504,8 +439,8 @@ def main():
         
         selected = option_menu(
             menu_title=None,
-            options=["🗣️ အသံထုတ်ရန်", "🎚️ Effect ပြောင်းရန်", "ℹ️ အကြောင်း", "🔐 Admin"],
-            icons=["mic", "sliders", "info-circle", "lock"],
+            options=["🗣️ အသံထုတ်ရန်", "🔐 Admin"],
+            icons=["mic", "lock"],
             default_index=0,
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
@@ -525,10 +460,6 @@ def main():
 
     if selected == "🗣️ အသံထုတ်ရန်":
         tts_page()
-    elif selected == "🎚️ Effect ပြောင်းရန်":
-        effects_page()
-    elif selected == "ℹ️ အကြောင်း":
-        about_page()
     else:
         admin_page()
 
