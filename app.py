@@ -304,19 +304,41 @@ def tts_page():
         selected_idx = voice_options.index(selected_voice_str)
         voice_id, pitch_offset, name, label = FEATURED_VOICES[:10][selected_idx]
 
-        # Only the eight Google voices need a key. The password input masks it
-        # and the value is passed to the engine for this session's request.
-        google_api_key = None
+        # Clear the visible input on the rerun after a quota error. This is
+        # done before the widget is created so Streamlit can safely update it.
+        if st.session_state.pop("reset_google_key_input", False):
+            st.session_state["google_api_key_input"] = ""
+
+        # Premium key is saved only in the current Streamlit session. Once saved,
+        # the input is hidden; it is never written to a repository or a file.
+        google_api_key = st.session_state.get("saved_google_api_key")
         if voice_id.startswith("google:"):
-            google_api_key = st.text_input(
-                "🔑 Google AI Studio API Key (Premium အသံ ၈ ခုအတွက်)",
-                type="password",
-                placeholder="AIza... သင်၏ API Key ကို ဒီမှာထည့်ပါ",
-                help="Key ကို မျှဝေမထားပါနှင့်။ Premium Google voice ၈ ခုအတွက်သာ အသုံးပြုပါမည်။",
-            ).strip()
-            st.caption("Thiha နှင့် Nilar သည် Key မလိုသော free voice များဖြစ်သည်။ Premium အသံ ၈ ခုအတွက် ကိုယ်ပိုင် Google AI Studio API Key ထည့်ပါ။")
-            if not google_api_key:
-                st.info("Google voice သုံးရန် API Key ထည့်ပါ။ App Secrets တွင် key ရှိပါက ထို key ကို fallback အဖြစ် အလိုအလျောက် သုံးပါမည်။")
+            st.markdown(
+                "🔑 **Premium အသံ ၈ ခုအတွက် Google AI Studio API Key**  "
+                "[Key ယူရန် ဒီမှာနှိပ်ပါ](https://aistudio.google.com/app/apikey)"
+            )
+            st.caption("Google AI Studio → Create API key → Copy လုပ်ပြီး အောက်မှာထည့်ပါ။ Thiha နှင့် Nilar သည် Key မလိုသော free voice များဖြစ်သည်။")
+
+            if google_api_key:
+                st.success("✅ API Key သိမ်းပြီးပါပြီ။ Premium အသံ ၈ ခုအတွက် အသုံးပြုနေပါသည်။")
+                if st.button("🔄 Key ပြန်ပြောင်းမည်", key="change_google_key", use_container_width=True):
+                    st.session_state.pop("saved_google_api_key", None)
+                    st.session_state["reset_google_key_input"] = True
+                    st.rerun()
+            else:
+                entered_key = st.text_input(
+                    "Google AI Studio API Key ထည့်ရန်",
+                    type="password",
+                    placeholder="AIza... သင်၏ API Key ကို ဒီမှာထည့်ပါ",
+                    key="google_api_key_input",
+                    help="Key ကို မျှဝေမထားပါနှင့်။ Premium Google voice ၈ ခုအတွက်သာ အသုံးပြုပါမည်။",
+                ).strip()
+                if st.button("💾 Key သိမ်းမည်", key="save_google_key", use_container_width=True):
+                    if entered_key:
+                        st.session_state["saved_google_api_key"] = entered_key
+                        st.rerun()
+                    st.warning("သိမ်းရန် Google API Key အရင်ထည့်ပါ။")
+                google_api_key = entered_key or None
 
         col_speed, col_pitch = st.columns(2)
         with col_speed:
@@ -375,7 +397,19 @@ def tts_page():
                     st.session_state.last_srt = srt_path
                     st.success("✅ အသံဖိုင် အောင်မြင်စွာ ဖန်တီးပြီးပါပြီ။")
                 except Exception as e:
-                    st.error(f"❌ အမှားအယွင်း ဖြစ်ပေါ်သည်: {str(e)}")
+                    error_text = str(e)
+                    # Google quota exhaustion normally returns HTTP 429. Forget
+                    # the session key and show the key field again for a new key.
+                    quota_exhausted = (
+                        voice_id.startswith("google:")
+                        and ("429" in error_text or "quota" in error_text.lower() or "resource_exhausted" in error_text.lower())
+                    )
+                    if quota_exhausted:
+                        st.session_state.pop("saved_google_api_key", None)
+                        st.session_state["reset_google_key_input"] = True
+                        st.warning("⚠️ ဒီ API Key ရဲ့ Google quota/Limit ပြည့်သွားပါပြီ။ Key အသစ်ထည့်ရန် Key box ပြန်ပေါ်လာပါမည်။")
+                        st.rerun()
+                    st.error(f"❌ အမှားအယွင်း ဖြစ်ပေါ်သည်: {error_text}")
 
     if "last_audio" in st.session_state:
         with st.container(border=True):
