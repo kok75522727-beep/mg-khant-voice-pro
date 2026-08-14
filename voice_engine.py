@@ -315,12 +315,14 @@ def _request_google_pcm(text, voice_name, api_key, speed_multiplier, pitch_value
         raise RuntimeError(f"Google TTS audio response မရပါ: {payload}") from exc
 
 
-def generate_google_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
-    """Generate Google Gemini TTS as a single request; long-text chunking is Edge-only."""
-    api_key = _secret_value("GOOGLE_API_KEY") or _secret_value("GEMINI_API_KEY")
+def generate_google_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz", api_key=None):
+    """Generate Google Gemini TTS using a user key first, then the app secret."""
+    # The user key is passed in memory for this request only; it is not saved
+    # to a file or written to Streamlit Secrets.
+    api_key = (api_key or "").strip() or _secret_value("GOOGLE_API_KEY") or _secret_value("GEMINI_API_KEY")
     voice_name = voice.rsplit(":", 1)[-1]
     if not api_key:
-        raise RuntimeError("GOOGLE_API_KEY ကို Streamlit Secrets ထဲ ထည့်ပါ။")
+        raise RuntimeError("Google voice သုံးရန် Google AI Studio API Key ထည့်ပါ။")
     try:
         rate_percent = float(str(rate).replace("%", "").replace("+", ""))
     except ValueError:
@@ -341,11 +343,11 @@ def generate_google_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
     return output_file, sub_file
 
 
-def run_tts_to_file(text, voice_id, pitch_offset, rate="+0%", suffix="output"):
+def run_tts_to_file(text, voice_id, pitch_offset, rate="+0%", suffix="output", api_key=None):
     """Route the two Edge voices and eight Google Gemini TTS voices."""
     if voice_id.startswith("google:"):
         audio_path, sub_path = generate_google_tts(
-            text, voice_id, rate=rate, pitch=pitch_offset
+            text, voice_id, rate=rate, pitch=pitch_offset, api_key=api_key
         )
     elif voice_id.startswith("edge:"):
         edge_voice = voice_id.removeprefix("edge:")
@@ -408,5 +410,4 @@ __all__ = [
     "run_tts_to_file",
     "apply_effects",
 ]
-
 
