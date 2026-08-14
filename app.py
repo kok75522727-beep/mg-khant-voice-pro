@@ -304,41 +304,10 @@ def tts_page():
         selected_idx = voice_options.index(selected_voice_str)
         voice_id, pitch_offset, name, label = FEATURED_VOICES[:10][selected_idx]
 
-        # Clear the visible input on the rerun after a quota error. This is
-        # done before the widget is created so Streamlit can safely update it.
-        if st.session_state.pop("reset_google_key_input", False):
-            st.session_state["google_api_key_input"] = ""
-
-        # Premium key is saved only in the current Streamlit session. Once saved,
-        # the input is hidden; it is never written to a repository or a file.
+        # The key is managed from the dedicated API Key menu page.
         google_api_key = st.session_state.get("saved_google_api_key")
-        if voice_id.startswith("google:"):
-            st.markdown(
-                "🔑 **Premium အသံ ၈ ခုအတွက် Google AI Studio API Key**  "
-                "[Key ယူရန် ဒီမှာနှိပ်ပါ](https://aistudio.google.com/app/apikey)"
-            )
-            st.caption("Google AI Studio → Create API key → Copy လုပ်ပြီး အောက်မှာထည့်ပါ။ Thiha နှင့် Nilar သည် Key မလိုသော free voice များဖြစ်သည်။")
-
-            if google_api_key:
-                st.success("✅ API Key သိမ်းပြီးပါပြီ။ Premium အသံ ၈ ခုအတွက် အသုံးပြုနေပါသည်။")
-                if st.button("🔄 Key ပြန်ပြောင်းမည်", key="change_google_key", use_container_width=True):
-                    st.session_state.pop("saved_google_api_key", None)
-                    st.session_state["reset_google_key_input"] = True
-                    st.rerun()
-            else:
-                entered_key = st.text_input(
-                    "Google AI Studio API Key ထည့်ရန်",
-                    type="password",
-                    placeholder="AIza... သင်၏ API Key ကို ဒီမှာထည့်ပါ",
-                    key="google_api_key_input",
-                    help="Key ကို မျှဝေမထားပါနှင့်။ Premium Google voice ၈ ခုအတွက်သာ အသုံးပြုပါမည်။",
-                ).strip()
-                if st.button("💾 Key သိမ်းမည်", key="save_google_key", use_container_width=True):
-                    if entered_key:
-                        st.session_state["saved_google_api_key"] = entered_key
-                        st.rerun()
-                    st.warning("သိမ်းရန် Google API Key အရင်ထည့်ပါ။")
-                google_api_key = entered_key or None
+        if voice_id.startswith("google:") and not google_api_key:
+            st.info("🔑 Premium အသံ ၈ ခုသုံးရန် Sidebar ရှိ **API Key** menu မှာ Key ထည့်ပြီး သိမ်းပါ။")
 
         col_speed, col_pitch = st.columns(2)
         with col_speed:
@@ -447,6 +416,47 @@ def tts_page():
                     )
 
 # ---------------------------------------------------------------------------
+# API Key Page
+# ---------------------------------------------------------------------------
+
+def api_key_page():
+    """Collect and save a Google AI Studio key for the current session only."""
+    if st.session_state.pop("reset_google_key_input", False):
+        st.session_state["google_api_key_input"] = ""
+
+    with st.container(border=True):
+        st.markdown("### 🔑 Google AI Studio API Key")
+        st.markdown(
+            "Premium Google အသံ ၈ ခုသုံးရန် ကိုယ်ပိုင် API Key ထည့်ပါ။ "
+            "Key ကို App ထဲမှာ file/GitHub သို့မဟုတ် Secrets ထဲ မသိမ်းဘဲ ဒီ session အတွင်းသာ အသုံးပြုပါမည်။"
+        )
+        st.markdown("[🔗 Google AI Studio မှ Key ယူရန် ဒီမှာနှိပ်ပါ](https://aistudio.google.com/app/apikey)")
+        st.caption("Google AI Studio → Create API key → Project ရွေးပါ → Key ကို Copy လုပ်ပါ။")
+
+        saved_key = st.session_state.get("saved_google_api_key")
+        if saved_key:
+            st.success("✅ API Key သိမ်းပြီးပါပြီ။ Premium အသံ ၈ ခုအတွက် အသုံးပြုနေပါသည်။")
+            if st.button("🔄 Key ပြန်ပြောင်းမည်", key="change_google_key", use_container_width=True):
+                st.session_state.pop("saved_google_api_key", None)
+                st.session_state["reset_google_key_input"] = True
+                st.rerun()
+        else:
+            entered_key = st.text_input(
+                "Google AI Studio API Key ထည့်ရန်",
+                type="password",
+                placeholder="AIza... သင်၏ API Key ကို ဒီမှာထည့်ပါ",
+                key="google_api_key_input",
+                help="Key ကို မည်သူ့ကိုမျှ မမျှဝေပါနှင့်။",
+            ).strip()
+            if st.button("💾 Key သိမ်းမည်", key="save_google_key", use_container_width=True):
+                if entered_key:
+                    st.session_state["saved_google_api_key"] = entered_key
+                    st.rerun()
+                st.warning("သိမ်းရန် Google API Key အရင်ထည့်ပါ။")
+
+        st.info("Google quota Limit ပြည့်ခြင်း သို့မဟုတ် Project Access Denied ဖြစ်ပါက Key ထည့်သည့်နေရာ ပြန်ပေါ်လာပြီး Key အသစ် ထည့်နိုင်ပါမည်။")
+
+# ---------------------------------------------------------------------------
 # Admin Page
 # ---------------------------------------------------------------------------
 
@@ -483,8 +493,8 @@ def main():
         
         selected = option_menu(
             menu_title=None,
-            options=["🗣️ အသံထုတ်ရန်", "🔐 Admin"],
-            icons=["mic", "lock"],
+            options=["🗣️ အသံထုတ်ရန်", "🔑 API Key", "🔐 Admin"],
+            icons=["mic", "key", "lock"],
             default_index=0,
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
@@ -502,10 +512,4 @@ def main():
         st.markdown("---")
         st.markdown("<div style='text-align: center; color: #64748b; font-size: 12px;'>© 2026 Mg Khant Voice System<br>All Rights Reserved.</div>", unsafe_allow_html=True)
 
-    if selected == "🗣️ အသံထုတ်ရန်":
-        tts_page()
-    else:
-        admin_page()
-
-if __name__ == "__main__":
-    main()
+    if selected == "🗣️ အသံထ
