@@ -273,9 +273,18 @@ def _request_google_pcm(text, voice_name, api_key, speed_multiplier, pitch_value
         pitch_instruction = f"Use a slightly lower pitch, about {abs(pitch_value):.0f} percent below normal."
     else:
         pitch_instruction = "Use a natural, normal pitch."
+    # Premium ကိုသီဟ uses Fenrir and is intended as the playful/comedy voice.
+    if voice_name == "Fenrir":
+        style_instruction = (
+            "Use a playful, humorous Myanmar narration style with lively energy, "
+            "natural comic timing, light reaction, and a friendly smile in the voice. "
+            "Keep Burmese pronunciation clear and do not overact."
+        )
+    else:
+        style_instruction = "Use a natural, clear narration style."
     tts_prompt = (
         "Read the following text aloud exactly as written. "
-        f"{speed_instruction} {pitch_instruction} "
+        f"{style_instruction} {speed_instruction} {pitch_instruction} "
         "Do not translate, summarize, add, or remove words.\n\n"
         f"Text:\n{text}"
     )
