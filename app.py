@@ -486,6 +486,12 @@ def admin_page():
 # ---------------------------------------------------------------------------
 
 def main():
+    # New sessions open directly on TTS; the Admin password is never shown
+    # unless the user explicitly selects the Admin menu.
+    if "main_menu_initialized" not in st.session_state:
+        st.session_state["main_menu_initialized"] = True
+        st.session_state["main_menu"] = "🗣️ အသံထုတ်ရန်"
+
     with st.sidebar:
         st.markdown("<h2 style='text-align: center; color: #818cf8;'>🎙️ Mg Khant Pro</h2>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 13px;'>Advanced Voice Changer</p>", unsafe_allow_html=True)
@@ -496,6 +502,7 @@ def main():
             options=["🗣️ အသံထုတ်ရန်", "🔑 API Key", "🔐 Admin"],
             icons=["mic", "key", "lock"],
             default_index=0,
+            key="main_menu",
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
                 "icon": {"color": "#818cf8", "font-size": "16px"},
@@ -512,7 +519,7 @@ def main():
         st.markdown("---")
         st.markdown("<div style='text-align: center; color: #64748b; font-size: 12px;'>© 2026 Mg Khant Voice System<br>All Rights Reserved.</div>", unsafe_allow_html=True)
 
-    if selected == "🗣 အသံထုတ်ရန်":
+    if selected == "🗣️ အသံထုတ်ရန်":
         tts_page()
     elif selected == "🔑 API Key":
         api_key_page()
