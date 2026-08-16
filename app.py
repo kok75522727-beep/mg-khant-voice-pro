@@ -291,7 +291,7 @@ def tts_page():
         # Keep the visible UI names explicit so old cached voice labels cannot reappear.
         voice_options = [
             "Thiha", "Nilar",
-            "ကိုဇင်မင်း", "ကိုထက်အောင်", "ကိုရဲမင်း", "ကိုသီဟ",
+            "ကိုဇင်မင်း", "ကိုထက်အောင်", "ကိုရဲမင်း", "ကိုသီဟ (ဟာသ)",
             "မေသက်", "သဇင်", "နွယ်နွယ်", "အိမ့်ချစ်",
         ]
         selected_voice_str = st.radio(
@@ -512,7 +512,7 @@ def main():
         st.markdown("---")
         st.markdown("<div style='text-align: center; color: #64748b; font-size: 12px;'>© 2026 Mg Khant Voice System<br>All Rights Reserved.</div>", unsafe_allow_html=True)
 
-    if selected == "🗣️ အသံထုတ်ရန်":
+    if selected == "🗣 အသံထုတ်ရန်":
         tts_page()
     elif selected == "🔑 API Key":
         api_key_page()
