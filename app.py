@@ -338,10 +338,57 @@ def tts_page():
         selected_idx = voice_options.index(selected_voice_str)
         voice_id, pitch_offset, name, label = FEATURED_VOICES[:10][selected_idx]
 
-        # The key is managed from the dedicated API Key menu page.
         google_api_key = st.session_state.get("saved_google_api_key")
-        if voice_id.startswith("google:") and not google_api_key:
-            st.info("🔑 Premium အသံ ၈ ခုသုံးရန် Sidebar ရှိ **API Key** menu မှာ Key ထည့်ပြီး သိမ်းပါ။")
+        if voice_id.startswith("google:"):
+            if st.session_state.pop("reset_google_key_input", False):
+                st.session_state["google_api_key_input"] = ""
+
+            with st.container(border=True):
+                st.markdown("#### 🔑 Premium အသံအတွက် Google API Key")
+                st.caption("Key တစ်ခါသိမ်းပြီးရင် ဒီ Browser ထဲမှာ မှတ်ထားပြီး နောက်တစ်ခါ ပြန်ထည့်စရာမလိုပါ။")
+                st.markdown("[🔗 Google AI Studio မှ Key ယူရန်](https://aistudio.google.com/app/apikey)")
+
+                if google_api_key:
+                    st.success("✅ API Key သိမ်းပြီးပါပြီ။ ဒီ Premium အသံအတွက် အသုံးပြုနေပါသည်။")
+                    if st.button("🔄 Key ပြန်ပြောင်းမည်", key="change_google_key_tts", use_container_width=True):
+                        st.session_state.pop("saved_google_api_key", None)
+                        storage = browser_storage()
+                        if storage is not None:
+                            try:
+                                storage.deleteItem(BROWSER_KEY_NAME)
+                            except Exception:
+                                pass
+                        st.session_state["google_api_key_input"] = ""
+                        st.rerun()
+                else:
+                    entered_key = st.text_input(
+                        "Google AI Studio API Key ထည့်ရန်",
+                        type="password",
+                        placeholder="AIza... သင်၏ API Key ကို ဒီမှာထည့်ပါ",
+                        key="google_api_key_input",
+                        help="Google AI Studio မှ Copy လုပ်ထားသော Key ကိုသာ ထည့်ပါ။",
+                    ).strip()
+                    if st.button("💾 Key သိမ်းမည်", key="save_google_key_tts", use_container_width=True):
+                        if not entered_key:
+                            st.warning("သိမ်းရန် Google API Key အရင်ထည့်ပါ။")
+                        else:
+                            try:
+                                entered_key.encode("ascii")
+                                if any(char.isspace() for char in entered_key):
+                                    st.error("❌ Key ထဲမှာ space ပါနေပါသည်။ Key ကို ပြန်ကူးထည့်ပါ။")
+                                else:
+                                    st.session_state["saved_google_api_key"] = entered_key
+                                    storage = browser_storage()
+                                    if storage is not None:
+                                        try:
+                                            storage.setItem(BROWSER_KEY_NAME, entered_key)
+                                        except Exception:
+                                            pass
+                                    st.rerun()
+                            except UnicodeEncodeError:
+                                st.error("❌ Key မမှန်ပါ။ Google AI Studio မှ Copy လုပ်ထားသော အင်္ဂလိပ်အက္ခရာ/နံပါတ် API Key ကိုသာ ထည့်ပါ။")
+
+            google_api_key = st.session_state.get("saved_google_api_key")
 
         col_speed, col_pitch = st.columns(2)
         with col_speed:
@@ -473,67 +520,6 @@ def tts_page():
                     )
 
 # ---------------------------------------------------------------------------
-# API Key Page
-# ---------------------------------------------------------------------------
-
-def api_key_page():
-    """Collect and save a Google AI Studio key in this browser."""
-    if st.session_state.pop("reset_google_key_input", False):
-        st.session_state["google_api_key_input"] = ""
-
-    with st.container(border=True):
-        st.markdown("### 🔑 Google AI Studio API Key")
-        st.markdown(
-            "Premium Google အသံ ၈ ခုသုံးရန် ကိုယ်ပိုင် API Key ထည့်ပါ။ "
-            "Key ကို App file/GitHub/Secrets ထဲ မသိမ်းဘဲ ဒီ Browser ထဲမှာသာ သိမ်းထားပါမည်။"
-        )
-        st.markdown("[🔗 Google AI Studio မှ Key ယူရန် ဒီမှာနှိပ်ပါ](https://aistudio.google.com/app/apikey)")
-        st.caption("Google AI Studio → Create API key → Project ရွေးပါ → Key ကို Copy လုပ်ပါ။")
-
-        saved_key = st.session_state.get("saved_google_api_key")
-        if saved_key:
-            st.success("✅ API Key သိမ်းပြီးပါပြီ။ Premium အသံ ၈ ခုအတွက် အသုံးပြုနေပါသည်။")
-            if st.button("🔄 Key ပြန်ပြောင်းမည်", key="change_google_key", use_container_width=True):
-                st.session_state.pop("saved_google_api_key", None)
-                storage = browser_storage()
-                if storage is not None:
-                    try:
-                        storage.deleteItem(BROWSER_KEY_NAME)
-                    except Exception:
-                        pass
-                st.session_state["reset_google_key_input"] = True
-                st.rerun()
-        else:
-            entered_key = st.text_input(
-                "Google AI Studio API Key ထည့်ရန်",
-                type="password",
-                placeholder="AIza... သင်၏ API Key ကို ဒီမှာထည့်ပါ",
-                key="google_api_key_input",
-                help="Key ကို မည်သူ့ကိုမျှ မမျှဝေပါနှင့်။",
-            ).strip()
-            if st.button("💾 Key သိမ်းမည်", key="save_google_key", use_container_width=True):
-                if not entered_key:
-                    st.warning("သိမ်းရန် Google API Key အရင်ထည့်ပါ။")
-                else:
-                    try:
-                        entered_key.encode("ascii")
-                        if any(char.isspace() for char in entered_key):
-                            st.error("❌ Key ထဲမှာ space ပါနေပါသည်။ Key ကို ပြန်ကူးထည့်ပါ။")
-                        else:
-                            st.session_state["saved_google_api_key"] = entered_key
-                            storage = browser_storage()
-                            if storage is not None:
-                                try:
-                                    storage.setItem(BROWSER_KEY_NAME, entered_key)
-                                except Exception:
-                                    pass
-                            st.rerun()
-                    except UnicodeEncodeError:
-                        st.error("❌ Key မမှန်ပါ။ Google AI Studio မှ Copy လုပ်ထားသော အင်္ဂလိပ်အက္ခရာ/နံပါတ် API Key ကိုသာ ထည့်ပါ။")
-
-        st.info("Google quota Limit ပြည့်ခြင်း သို့မဟုတ် Project Access Denied ဖြစ်ပါက Key ထည့်သည့်နေရာ ပြန်ပေါ်လာပြီး Key အသစ် ထည့်နိုင်ပါမည်။")
-
-# ---------------------------------------------------------------------------
 # Admin Page
 # ---------------------------------------------------------------------------
 
@@ -577,8 +563,8 @@ def main():
         
         selected = option_menu(
             menu_title=None,
-            options=["🗣️ အသံထုတ်ရန်", "🔑 API Key", "🔐 Admin"],
-            icons=["mic", "key", "lock"],
+            options=["🗣️ အသံထုတ်ရန်", "🔐 Admin"],
+            icons=["mic", "lock"],
             default_index=0,
             key="main_menu",
             styles={
@@ -599,8 +585,6 @@ def main():
 
     if selected == "🗣️ အသံထုတ်ရန်":
         tts_page()
-    elif selected == "🔑 API Key":
-        api_key_page()
     else:
         admin_page()
 
