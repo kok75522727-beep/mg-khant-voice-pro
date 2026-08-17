@@ -1,9 +1,6 @@
 streamlit>=1.28.0
 streamlit-option-menu>=0.3.6
 edge-tts>=6.1.1
-pathlib>=1.0.1
-# Add this line to the existing requirements.txt
+requests>=2.31.0
 mutagen>=1.47.0
-
-# Keep your existing dependencies too, such as streamlit, edge-tts, and requests.
-
+streamlit-local-storage>=0.0.25
