@@ -292,6 +292,7 @@ def render_section(num, title):
 # ---------------------------------------------------------------------------
 
 def tts_page():
+    MAX_TEXT_CHARS = 30000
     # Telegram Banner
     st.markdown("""
     <div class="telegram-banner">
@@ -312,12 +313,13 @@ def tts_page():
         text = st.text_area(
             "စာသားထည့်ရန်",
             value="",
-            height=140,
+            height=180,
+            max_chars=MAX_TEXT_CHARS,
             label_visibility="collapsed",
             placeholder="ဒီမှာ စာသားရိုက်ထည့်ပါ..."
         )
         st.markdown(
-            f"<div style='text-align:right; color:#64748b; font-size:13px; margin-top:-8px; margin-bottom:12px;'>စာလုံးရေ — <b>{len(text):,}</b> လုံး</div>",
+            f"<div style='text-align:right; color:#64748b; font-size:13px; margin-top:-8px; margin-bottom:12px;'>စာလုံးရေ — <b>{len(text):,}</b> / {MAX_TEXT_CHARS:,} လုံး</div>",
             unsafe_allow_html=True,
         )
         
@@ -432,8 +434,11 @@ def tts_page():
             run_btn = st.button("🎧 အသံဖန်တီးမည် (Generate Audio)", use_container_width=True)
 
     if run_btn or test_btn:
+        if len(text) > MAX_TEXT_CHARS:
+            st.error(f"❌ စာလုံးရေ {MAX_TEXT_CHARS:,} ထက် မကျော်ရပါ။")
+            return
         action_text = text.strip() if text.strip() else "အားလုံးပဲ မင်္ဂလာပါ။ Mg Khant AI မှ ကြိုဆိုပါတယ်။"
-        with st.spinner("⏳ အသံဖိုင် ဖန်တီးနေပါသည်... ခဏစောင့်ပါ။"):
+        with st.spinner("⏳ အသံဖိုင် ဖန်တီးနေပါသည်... စာလုံးရေများလို့ ခဏကြာနိုင်ပါတယ်။"):
                 try:
                     # Use the TTS engine's rate control so Streamlit Cloud does
                     # not need the external ffmpeg binary.
@@ -506,8 +511,7 @@ def tts_page():
                     "⬇️ အသံဖိုင် ဒေါင်းလုဒ်",
                     data=st.session_state.last_audio.read_bytes(),
                     file_name=f"{st.session_state.get('output_filename', 'mgkhant_voice')}{st.session_state.last_audio.suffix}",
-                    mime="audio/wav" if st.session_state.last_audio.suffix.lower() == ".wav" else "audio/mpeg",
-                    use_container_width=True
+                    mime="audio/wav" if st.session_state.last_audio.suffix.lower() == ".wav" else "audio/mpeg",use_container_width=True
                 )
             with dl_col2:
                 if "last_srt" in st.session_state and st.session_state.last_srt.exists():
@@ -590,3 +594,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+               
