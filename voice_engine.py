@@ -304,7 +304,7 @@ def _request_google_pcm(text, voice_name, api_key, speed_multiplier, pitch_value
                 },
             },
         },
-        timeout=120,
+        timeout=45,
     )
     if not response.ok:
         raise RuntimeError(f"Google Gemini TTS error {response.status_code}: {response.text[:400]}")
@@ -332,6 +332,19 @@ def generate_google_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz", api
     voice_name = voice.rsplit(":", 1)[-1]
     if not api_key:
         raise RuntimeError("Google voice သုံးရန် Google AI Studio API Key ထည့်ပါ။")
+    # HTTP headers use ASCII/Latin-1-compatible values. Burmese text, spaces,
+    # quotes, or a pasted label must never be sent as the API key header.
+    try:
+        api_key.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise RuntimeError(
+            "Google API Key မမှန်ပါ။ API Key box ထဲမှာ Google AI Studio က Copy လုပ်ထားတဲ့ "
+            "အင်္ဂလိပ်အက္ခရာ/နံပါတ် key ကိုပဲ ထည့်ပါ။ မြန်မာစာ၊ space သို့မဟုတ် label မထည့်ပါနှင့်။"
+        ) from exc
+    if any(char.isspace() for char in api_key):
+        raise RuntimeError(
+            "Google API Key မမှန်ပါ။ Key ကို အစ/အဆုံး space မပါဘဲ ပြန်ကူးထည့်ပါ။"
+        )
     try:
         rate_percent = float(str(rate).replace("%", "").replace("+", ""))
     except ValueError:
@@ -342,9 +355,22 @@ def generate_google_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz", api
     except ValueError:
         pitch_value = 0.0
 
-    pcm_bytes = _request_google_pcm(
-        text, voice_name, api_key, speed_multiplier, pitch_value
-    )
+    # Keep each Gemini request bounded so a long Burmese text does not leave
+    # the app waiting on one oversized generation request.
+    text_chunks = split_tts_chunks(text, max_chars=600)
+    pcm_chunks = []
+    for chunk in text_chunks:
+        pcm_chunks.append(
+            _request_google_pcm(
+                chunk, voice_name, api_key, speed_multiplier, pitch_value
+            )
+        )
+
+    # Gemini returns 24 kHz, mono, 16-bit PCM. Add a very small PCM silence gap
+    # between chunks to avoid clipped words while keeping the final audio smooth.
+    silence_frames = int(24000 * 0.04)
+    silence_gap = b"\x00\x00" * silence_frames
+    pcm_bytes = silence_gap.join(pcm_chunks)
     output_file = Path("output.wav")
     sub_file = Path("output.srt")
     _write_pcm_wav(output_file, pcm_bytes)
