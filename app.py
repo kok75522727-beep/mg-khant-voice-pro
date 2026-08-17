@@ -7,6 +7,11 @@ from pathlib import Path
 import json
 import re
 
+try:
+    from streamlit_local_storage import LocalStorage
+except ImportError:
+    LocalStorage = None
+
 from voice_engine import (
     FEATURED_VOICES,
     change_tempo, get_usage_count, run_tts_to_file
@@ -17,6 +22,30 @@ from voice_engine import (
 # ---------------------------------------------------------------------------
 
 ADMIN_PASSWORD = "Khant@6789"
+BROWSER_KEY_NAME = "mgkhant_google_api_key"
+
+
+def browser_storage():
+    if LocalStorage is None:
+        return None
+    try:
+        return LocalStorage()
+    except Exception:
+        return None
+
+
+def restore_browser_key():
+    if st.session_state.get("saved_google_api_key"):
+        return
+    storage = browser_storage()
+    if storage is None:
+        return
+    try:
+        stored_key = storage.getItem(BROWSER_KEY_NAME)
+        if stored_key:
+            st.session_state["saved_google_api_key"] = str(stored_key).strip()
+    except Exception:
+        pass
 
 st.set_page_config(
     page_title="Mg Khant အသံပြောင်းစနစ် Pro",
@@ -287,6 +316,10 @@ def tts_page():
             label_visibility="collapsed",
             placeholder="ဒီမှာ စာသားရိုက်ထည့်ပါ..."
         )
+        st.markdown(
+            f"<div style='text-align:right; color:#64748b; font-size:13px; margin-top:-8px; margin-bottom:12px;'>စာလုံးရေ — <b>{len(text):,}</b> လုံး</div>",
+            unsafe_allow_html=True,
+        )
         
         render_section("2", "အသံအမျိုးအစား ရွေးချယ်ခြင်း")
         # Keep the visible UI names explicit so old cached voice labels cannot reappear.
@@ -392,11 +425,23 @@ def tts_page():
                     )
                     if quota_exhausted:
                         st.session_state.pop("saved_google_api_key", None)
+                        storage = browser_storage()
+                        if storage is not None:
+                            try:
+                                storage.deleteItem(BROWSER_KEY_NAME)
+                            except Exception:
+                                pass
                         st.session_state["reset_google_key_input"] = True
                         st.warning("⚠️ ဒီ API Key ရဲ့ Google quota/Limit ပြည့်သွားပါပြီ။ Key အသစ်ထည့်ရန် Key box ပြန်ပေါ်လာပါမည်။")
                         st.rerun()
                     if project_denied:
                         st.session_state.pop("saved_google_api_key", None)
+                        storage = browser_storage()
+                        if storage is not None:
+                            try:
+                                storage.deleteItem(BROWSER_KEY_NAME)
+                            except Exception:
+                                pass
                         st.session_state["reset_google_key_input"] = True
                         st.error("❌ ဒီ API Key ရဲ့ Google Project ကို Access Denied လုပ်ထားပါသည်။ Project အသစ်ဖန်တီးပြီး API Key အသစ်ယူပါ။ Key box ပြန်ပေါ်လာပါမည်။")
                         st.rerun()
@@ -432,7 +477,7 @@ def tts_page():
 # ---------------------------------------------------------------------------
 
 def api_key_page():
-    """Collect and save a Google AI Studio key for the current session only."""
+    """Collect and save a Google AI Studio key in this browser."""
     if st.session_state.pop("reset_google_key_input", False):
         st.session_state["google_api_key_input"] = ""
 
@@ -440,7 +485,7 @@ def api_key_page():
         st.markdown("### 🔑 Google AI Studio API Key")
         st.markdown(
             "Premium Google အသံ ၈ ခုသုံးရန် ကိုယ်ပိုင် API Key ထည့်ပါ။ "
-            "Key ကို App ထဲမှာ file/GitHub သို့မဟုတ် Secrets ထဲ မသိမ်းဘဲ ဒီ session အတွင်းသာ အသုံးပြုပါမည်။"
+            "Key ကို App file/GitHub/Secrets ထဲ မသိမ်းဘဲ ဒီ Browser ထဲမှာသာ သိမ်းထားပါမည်။"
         )
         st.markdown("[🔗 Google AI Studio မှ Key ယူရန် ဒီမှာနှိပ်ပါ](https://aistudio.google.com/app/apikey)")
         st.caption("Google AI Studio → Create API key → Project ရွေးပါ → Key ကို Copy လုပ်ပါ။")
@@ -450,6 +495,12 @@ def api_key_page():
             st.success("✅ API Key သိမ်းပြီးပါပြီ။ Premium အသံ ၈ ခုအတွက် အသုံးပြုနေပါသည်။")
             if st.button("🔄 Key ပြန်ပြောင်းမည်", key="change_google_key", use_container_width=True):
                 st.session_state.pop("saved_google_api_key", None)
+                storage = browser_storage()
+                if storage is not None:
+                    try:
+                        storage.deleteItem(BROWSER_KEY_NAME)
+                    except Exception:
+                        pass
                 st.session_state["reset_google_key_input"] = True
                 st.rerun()
         else:
@@ -470,6 +521,12 @@ def api_key_page():
                             st.error("❌ Key ထဲမှာ space ပါနေပါသည်။ Key ကို ပြန်ကူးထည့်ပါ။")
                         else:
                             st.session_state["saved_google_api_key"] = entered_key
+                            storage = browser_storage()
+                            if storage is not None:
+                                try:
+                                    storage.setItem(BROWSER_KEY_NAME, entered_key)
+                                except Exception:
+                                    pass
                             st.rerun()
                     except UnicodeEncodeError:
                         st.error("❌ Key မမှန်ပါ။ Google AI Studio မှ Copy လုပ်ထားသော အင်္ဂလိပ်အက္ခရာ/နံပါတ် API Key ကိုသာ ထည့်ပါ။")
@@ -506,6 +563,7 @@ def admin_page():
 # ---------------------------------------------------------------------------
 
 def main():
+    restore_browser_key()
     # New sessions open directly on TTS; the Admin password is never shown
     # unless the user explicitly selects the Admin menu.
     if "main_menu_initialized" not in st.session_state:
