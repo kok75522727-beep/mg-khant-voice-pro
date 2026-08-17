@@ -35,16 +35,23 @@ def browser_storage():
 
 
 def restore_browser_key():
-    if st.session_state.get("saved_google_api_key"):
+    """Restore the browser-saved key before rendering any TTS controls."""
+    current_key = st.session_state.get("saved_google_api_key")
+    if current_key and str(current_key).strip():
         return
     storage = browser_storage()
     if storage is None:
         return
     try:
         stored_key = storage.getItem(BROWSER_KEY_NAME)
-        if stored_key:
-            st.session_state["saved_google_api_key"] = str(stored_key).strip()
+        stored_key = str(stored_key or "").strip()
+        if stored_key and stored_key.lower() not in {"none", "null", "undefined"}:
+            stored_key.encode("ascii")
+            if not any(char.isspace() for char in stored_key):
+                st.session_state["saved_google_api_key"] = stored_key
     except Exception:
+        # Storage can be unavailable briefly while the component loads.
+        # The next Streamlit rerun will try again without breaking the app.
         pass
 
 st.set_page_config(
@@ -352,6 +359,7 @@ def tts_page():
 
                 if google_api_key:
                     st.success("✅ API Key သိမ်းပြီးပါပြီ။ ဒီ Premium အသံအတွက် အသုံးပြုနေပါသည်။")
+                    st.caption("Key box မပေါ်တော့ပါက Key ကို Browser ထဲမှာ အောင်မြင်စွာ သိမ်းထားပြီးဖြစ်ပါသည်။")
                     if st.button("🔄 Key ပြန်ပြောင်းမည်", key="change_google_key_tts", use_container_width=True):
                         st.session_state.pop("saved_google_api_key", None)
                         storage = browser_storage()
@@ -438,6 +446,10 @@ def tts_page():
             st.error(f"❌ စာလုံးရေ {MAX_TEXT_CHARS:,} ထက် မကျော်ရပါ။")
             return
         action_text = text.strip() if text.strip() else "အားလုံးပဲ မင်္ဂလာပါ။ Mg Khant AI မှ ကြိုဆိုပါတယ်။"
+        if voice_id.startswith("google:") and google_api_key:
+            estimated_chunks = max(1, (len(action_text) + 899) // 900)
+            if estimated_chunks > 10:
+                st.info(f"ℹ️ စာလုံးရေများသောကြောင့် Google API request ခန့်မှန်း {estimated_chunks} ကြိမ် ပို့ပါမည်။ Quota မလုံလောက်ပါက Limit ပြနိုင်ပါသည်။")
         with st.spinner("⏳ အသံဖိုင် ဖန်တီးနေပါသည်... စာလုံးရေများလို့ ခဏကြာနိုင်ပါတယ်။"):
                 try:
                     # Use the TTS engine's rate control so Streamlit Cloud does
@@ -464,40 +476,25 @@ def tts_page():
                     st.success("✅ အသံဖိုင် အောင်မြင်စွာ ဖန်တီးပြီးပါပြီ။")
                 except Exception as e:
                     error_text = str(e)
-                    # Google quota exhaustion normally returns HTTP 429. Forget
-                    # the session key and show the key field again for a new key.
+                    # Keep the saved key on errors. The input box should not
+                    # unexpectedly reappear after a long generation or a transient
+                    # network/API failure. The user can use "Key ပြန်ပြောင်းမည်"
+                    # manually when a different key is needed.
                     error_lower = error_text.lower()
                     quota_exhausted = (
                         voice_id.startswith("google:")
-                        and ("429" in error_text or "quota" in error_lower or "resource_exhausted" in error_lower)
+                        and ("429" in error_text or "resource_exhausted" in error_lower)
                     )
                     project_denied = (
                         voice_id.startswith("google:")
                         and ("403" in error_text or "permission_denied" in error_lower or "denied access" in error_lower)
                     )
                     if quota_exhausted:
-                        st.session_state.pop("saved_google_api_key", None)
-                        storage = browser_storage()
-                        if storage is not None:
-                            try:
-                                storage.deleteItem(BROWSER_KEY_NAME)
-                            except Exception:
-                                pass
-                        st.session_state["reset_google_key_input"] = True
-                        st.warning("⚠️ ဒီ API Key ရဲ့ Google quota/Limit ပြည့်သွားပါပြီ။ Key အသစ်ထည့်ရန် Key box ပြန်ပေါ်လာပါမည်။")
-                        st.rerun()
-                    if project_denied:
-                        st.session_state.pop("saved_google_api_key", None)
-                        storage = browser_storage()
-                        if storage is not None:
-                            try:
-                                storage.deleteItem(BROWSER_KEY_NAME)
-                            except Exception:
-                                pass
-                        st.session_state["reset_google_key_input"] = True
-                        st.error("❌ ဒီ API Key ရဲ့ Google Project ကို Access Denied လုပ်ထားပါသည်။ Project အသစ်ဖန်တီးပြီး API Key အသစ်ယူပါ။ Key box ပြန်ပေါ်လာပါမည်။")
-                        st.rerun()
-                    st.error(f"❌ အမှားအယွင်း ဖြစ်ပေါ်သည်: {error_text}")
+                        st.warning("⚠️ Google API quota/Limit ပြည့်နေပါသည်။ သိမ်းထားသော Key ကို မဖျက်ထားပါ။ Quota ပြန်ရသောအခါ ပြန်စမ်းနိုင်ပြီး Key အသစ်သုံးလိုပါက အပေါ်မှ **Key ပြန်ပြောင်းမည်** ကိုနှိပ်ပါ။")
+                    elif project_denied:
+                        st.error("❌ Google Project က Access Denied ဖြစ်နေပါသည်။ သိမ်းထားသော Key ကို မဖျက်ထားပါ။ Project/Key အသစ်သုံးလိုပါက အပေါ်မှ **Key ပြန်ပြောင်းမည်** ကိုနှိပ်ပါ။")
+                    else:
+                        st.error(f"❌ အမှားအယွင်း ဖြစ်ပေါ်သည်: {error_text}")
 
     if "last_audio" in st.session_state:
         with st.container(border=True):
@@ -511,7 +508,8 @@ def tts_page():
                     "⬇️ အသံဖိုင် ဒေါင်းလုဒ်",
                     data=st.session_state.last_audio.read_bytes(),
                     file_name=f"{st.session_state.get('output_filename', 'mgkhant_voice')}{st.session_state.last_audio.suffix}",
-                    mime="audio/wav" if st.session_state.last_audio.suffix.lower() == ".wav" else "audio/mpeg",use_container_width=True
+                    mime="audio/wav" if st.session_state.last_audio.suffix.lower() == ".wav" else "audio/mpeg",
+                    use_container_width=True
                 )
             with dl_col2:
                 if "last_srt" in st.session_state and st.session_state.last_srt.exists():
@@ -594,4 +592,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-               
