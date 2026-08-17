@@ -5,6 +5,7 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 from pathlib import Path
 import json
+import re
 
 from voice_engine import (
     FEATURED_VOICES,
@@ -337,6 +338,13 @@ def tts_page():
             )
 
         st.markdown("<div style='margin-top: 16px;'></div>", unsafe_allow_html=True)
+        filename_input = st.text_input(
+            "📁 ဖိုင်နာမည် သတ်မှတ်ရန်",
+            value=st.session_state.get("output_filename_input", "mgkhant_voice"),
+            placeholder="ဥပမာ - အင်ပါယာစတိတ်_ဇာတ်လမ်း",
+            help="Audio နဲ့ SRT နှစ်ခုလုံးကို ဒီနာမည်နဲ့ download ရပါမယ်။ .mp3/.wav/.srt ကို အလိုအလျောက် ထည့်ပေးပါမယ်။",
+        )
+        st.session_state["output_filename_input"] = filename_input
         action_col1, action_col2 = st.columns(2)
         with action_col1:
             test_btn = st.button("🔊 အသံစမ်းမည် (Test)", use_container_width=True)
@@ -362,6 +370,10 @@ def tts_page():
                         api_key=google_api_key if voice_id.startswith("google:") else None,
                     )
                     
+                    safe_filename = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "_", filename_input.strip()).strip(" ._")
+                    if not safe_filename:
+                        safe_filename = "mgkhant_voice"
+                    st.session_state["output_filename"] = safe_filename
                     st.session_state.last_audio = audio_path
                     st.session_state.last_srt = srt_path
                     st.success("✅ အသံဖိုင် အောင်မြင်စွာ ဖန်တီးပြီးပါပြီ။")
@@ -401,7 +413,7 @@ def tts_page():
                 st.download_button(
                     "⬇️ အသံဖိုင် ဒေါင်းလုဒ်",
                     data=st.session_state.last_audio.read_bytes(),
-                    file_name=f"mgkhant_voice{st.session_state.last_audio.suffix}",
+                    file_name=f"{st.session_state.get('output_filename', 'mgkhant_voice')}{st.session_state.last_audio.suffix}",
                     mime="audio/wav" if st.session_state.last_audio.suffix.lower() == ".wav" else "audio/mpeg",
                     use_container_width=True
                 )
@@ -410,7 +422,7 @@ def tts_page():
                     st.download_button(
                         "📄 SRT စာတန်းထိုး",
                         data=st.session_state.last_srt.read_bytes(),
-                        file_name="mgkhant_subtitle.srt",
+                        file_name=f"{st.session_state.get('output_filename', 'mgkhant_voice')}.srt",
                         mime="application/x-subrip",
                         use_container_width=True
                     )
@@ -449,10 +461,18 @@ def api_key_page():
                 help="Key ကို မည်သူ့ကိုမျှ မမျှဝေပါနှင့်။",
             ).strip()
             if st.button("💾 Key သိမ်းမည်", key="save_google_key", use_container_width=True):
-                if entered_key:
-                    st.session_state["saved_google_api_key"] = entered_key
-                    st.rerun()
-                st.warning("သိမ်းရန် Google API Key အရင်ထည့်ပါ။")
+                if not entered_key:
+                    st.warning("သိမ်းရန် Google API Key အရင်ထည့်ပါ။")
+                else:
+                    try:
+                        entered_key.encode("ascii")
+                        if any(char.isspace() for char in entered_key):
+                            st.error("❌ Key ထဲမှာ space ပါနေပါသည်။ Key ကို ပြန်ကူးထည့်ပါ။")
+                        else:
+                            st.session_state["saved_google_api_key"] = entered_key
+                            st.rerun()
+                    except UnicodeEncodeError:
+                        st.error("❌ Key မမှန်ပါ။ Google AI Studio မှ Copy လုပ်ထားသော အင်္ဂလိပ်အက္ခရာ/နံပါတ် API Key ကိုသာ ထည့်ပါ။")
 
         st.info("Google quota Limit ပြည့်ခြင်း သို့မဟုတ် Project Access Denied ဖြစ်ပါက Key ထည့်သည့်နေရာ ပြန်ပေါ်လာပြီး Key အသစ် ထည့်နိုင်ပါမည်။")
 
