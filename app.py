@@ -342,9 +342,9 @@ def tts_page():
         return
 
     with st.container(border=True):
-        st.markdown("### 🎙️ အသံဖန်တီးခြင်း (Text to Speech)")
+        st.markdown("### 🎙️ အသံဖန်တီးခြင်း")
         
-        render_section("1", "စာသားထည့်သွင်းရန် (မြန်မာ / အင်္ဂလိပ်)")
+        render_section("1", "စာသားထည့်သွင်းရန်")
         text = st.text_area(
             "စာသားထည့်ရန်",
             value="",
@@ -404,14 +404,14 @@ def tts_page():
             "📁 ဖိုင်နာမည် သတ်မှတ်ရန်",
             value=st.session_state.get("output_filename_input", "mgkhant_voice"),
             placeholder="ဥပမာ - အင်ပါယာစတိတ်_ဇာတ်လမ်း",
-            help="Audio နဲ့ SRT နှစ်ခုလုံးကို ဒီနာမည်နဲ့ download ရပါမယ်။ .mp3/.wav/.srt ကို အလိုအလျောက် ထည့်ပေးပါမယ်။",
+            help="အသံဖိုင်နဲ့ SRT ဖိုင် နှစ်ခုလုံးကို ဒီနာမည်နဲ့ ဒေါင်းလုဒ်ရပါမယ်။ ဖိုင်အမျိုးအစားကို အလိုအလျောက် ထည့်ပေးပါမယ်။",
         )
         st.session_state["output_filename_input"] = filename_input
         action_col1, action_col2 = st.columns(2)
         with action_col1:
-            test_btn = st.button("🔊 အသံစမ်းမည် (Test)", use_container_width=True)
+            test_btn = st.button("🔊 အသံစမ်းမည်", use_container_width=True)
         with action_col2:
-            run_btn = st.button("🎧 အသံဖန်တီးမည် (Generate Audio)", use_container_width=True)
+            run_btn = st.button("🎧 အသံဖန်တီးမည်", use_container_width=True)
 
     if run_btn or test_btn:
         action_text = text.strip() if text.strip() else "အားလုံးပဲ မင်္ဂလာပါ။ Mg Khant AI မှ ကြိုဆိုပါတယ်။"
@@ -477,8 +477,8 @@ def tts_page():
 
 def admin_page():
     with st.container(border=True):
-        st.markdown("### 🔐 Admin Dashboard")
-        pwd = st.text_input("Admin Password ထည့်ပါ", type="password", placeholder="Password ရိုက်ထည့်ပါ...")
+        st.markdown("### 🔐 စီမံခန့်ခွဲသူ စာမျက်နှာ")
+        pwd = st.text_input("စီမံခန့်ခွဲသူ စကားဝှက် ထည့်ပါ", type="password", placeholder="Password ရိုက်ထည့်ပါ...")
         
         if pwd == ADMIN_PASSWORD:
             st.success("✅ Admin အဖြစ် အောင်မြင်စွာ ဝင်ရောက်ပြီးပါပြီ။")
@@ -489,7 +489,7 @@ def admin_page():
             with col1:
                 st.metric("စုစုပေါင်း အသံထုတ်ယူမှု ကြိမ်ရေ", f"{count} ကြိမ်")
             with col2:
-                if st.button("🔄 Usage Count ကို 0 သို့ ပြန်ထားမည်", use_container_width=True):
+                if st.button("🔄 အသံထုတ်ယူမှု ကြိမ်ရေကို ၀ သို့ ပြန်ထားမည်", use_container_width=True):
                     with open("usage_stats.json", "w") as f:
                         json.dump({"count": 0}, f)
                     st.rerun()
@@ -509,7 +509,7 @@ def main():
 
     with st.sidebar:
         st.markdown("<h2 style='text-align: center; color: #818cf8;'>🎙️ Mg Khant Pro</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 13px;'>Advanced Voice Changer</p>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 13px;'>အဆင့်မြင့် အသံပြောင်းစနစ်</p>", unsafe_allow_html=True)
         st.markdown("---")
         
         selected = st.radio(
@@ -520,7 +520,7 @@ def main():
             label_visibility="collapsed",
         )
         st.markdown("---")
-        st.markdown("<div style='text-align: center; color: #64748b; font-size: 12px;'>© 2026 Mg Khant Voice System<br>All Rights Reserved.</div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align: center; color: #64748b; font-size: 12px;'>© ၂၀၂၆ Mg Khant အသံစနစ်<br>မူပိုင်ခွင့်အားလုံး ရယူထားသည်</div>", unsafe_allow_html=True)
 
     if selected == "🗣️ အသံထုတ်ရန်":
         tts_page()
@@ -529,3 +529,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+        
