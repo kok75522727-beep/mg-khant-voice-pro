@@ -21,7 +21,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 FEATURED_VOICES = [
-    ("eleven:dnWAVXtxJA3yQY68LcL7", "+0Hz", "စိုင်းစိုင်း", "စိုင်းစိုင်း"),
+    ("eleven:EabUFUUnrDFWvAeigfZl", "+0Hz", "စိုင်းစိုင်း", "စိုင်းစိုင်း"),
 ]
 
 EFFECTS = {
