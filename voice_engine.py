@@ -154,32 +154,12 @@ def _camb_headers(api_key):
 
 
 def get_camb_voices(limit=10):
-    """Return Burmese CAMB voices as app tuples: (id, pitch, name, label)."""
+    """Return the confirmed CAMB voice directly; list-voices may omit custom IDs."""
     api_key = _secret_value("CAMB_API_KEY").strip()
     if not api_key:
         raise RuntimeError("CAMB_API_KEY ကို Streamlit Secrets ထဲ ထည့်ပါ။")
-    response = requests.get(CAMB_VOICES_URL, headers={"x-api-key": api_key}, timeout=30)
-    if not response.ok:
-        raise RuntimeError(f"CAMB အသံစာရင်း မရပါ: {response.status_code} {response.text[:500]}")
-    data = response.json()
-    voices = data.get("voices", data) if isinstance(data, dict) else data
-    if not isinstance(voices, list):
-        raise RuntimeError("CAMB အသံစာရင်းပုံစံ မမှန်ပါ။")
-
-    burmese = []
-    for voice in voices:
-        if not isinstance(voice, dict):
-            continue
-        language = str(voice.get("language") or "").lower()
-        name = str(voice.get("voice_name") or voice.get("name") or "CAMB အသံ").strip()
-        # CAMB may return my, my-mm, or a Burmese-labelled voice.
-        if language.startswith("my") or "burmese" in language or "မြန်မာ" in name.lower():
-            voice_id = voice.get("id", voice.get("voice_id"))
-            if voice_id is not None:
-                burmese.append((str(voice_id), "+0Hz", name, name))
-    if not burmese:
-        raise RuntimeError("CAMB.AI မှ မြန်မာအသံ မတွေ့ပါ။ CAMB account ထဲမှာ မြန်မာ voice ရှိ/မရှိ စစ်ပါ။")
-    return burmese[:limit]
+    # Confirmed by the user from CAMB Voice Library.
+    return [("170619", "+0Hz", "စိုင်းစိုင်း", "စိုင်းစိုင်း")][:limit]
 
 
 def _rate_to_float(rate):
@@ -279,5 +259,5 @@ __all__ = [
     "get_usage_count",
     "run_tts_to_file",
     "apply_effects",
-            ]
-                                 
+    ]
+                
