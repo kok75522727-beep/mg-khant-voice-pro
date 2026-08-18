@@ -159,7 +159,7 @@ def get_camb_voices(limit=10):
     if not api_key:
         raise RuntimeError("CAMB_API_KEY ကို Streamlit Secrets ထဲ ထည့်ပါ။")
     # Confirmed by the user from CAMB Voice Library.
-    return [("170619", "+0Hz", "စိုင်းစိုင်း", "စိုင်းစိုင်း")][:limit]
+    return [("198651", "+0Hz", "စိုင်းစိုင်း", "စိုင်းစိုင်း")][:limit]
 
 
 def _rate_to_float(rate):
@@ -260,4 +260,4 @@ __all__ = [
     "run_tts_to_file",
     "apply_effects",
     ]
-        
+    
