@@ -78,8 +78,8 @@ def get_audio_duration(audio_path):
     return None
 
 
-def split_tts_chunks(text, max_chars=2500):
-    """Split text below CAMB.AI's 3000-character request limit."""
+def split_tts_chunks(text, max_chars=450):
+    """Split text below CAMB.AI's 500-character plan limit with a safety margin."""
     clean_text = re.sub(r"\s+", " ", str(text).replace("\r", "")).strip()
     if not clean_text:
         return ["အသံဖိုင်"]
@@ -260,4 +260,4 @@ __all__ = [
     "run_tts_to_file",
     "apply_effects",
     ]
-                
+        
