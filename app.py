@@ -360,7 +360,7 @@ def tts_page():
         render_section("2", "အသံအမျိုးအစား ရွေးချယ်ခြင်း")
         # Keep the visible UI names explicit so old cached voice labels cannot reappear.
         voice_options = [
-            "ရွှေနေ (ElevenLabs)",
+            "စိုင်းစိုင်း",
         ]
         selected_voice_str = st.radio(
             "အသံရွေးပါ",
