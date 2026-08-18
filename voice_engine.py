@@ -1,12 +1,9 @@
-import asyncio
-import base64
 import json
 import os
 import re
-import wave
 import shutil
-import subprocess
 import tempfile
+import wave
 from pathlib import Path
 
 import requests
@@ -16,13 +13,9 @@ try:
 except ImportError:
     MP3 = None
 
-# ---------------------------------------------------------------------------
-# ElevenLabs voices shown in the UI.
-# ---------------------------------------------------------------------------
-
-FEATURED_VOICES = [
-    ("eleven:EabUFUUnrDFWvAeigfZl", "+0Hz", "စိုင်းစိုင်း", "စိုင်းစိုင်း"),
-]
+# CAMB.AI public/custom voices are loaded dynamically from the account.
+# The UI will show up to ten Burmese voices returned by /list-voices.
+FEATURED_VOICES = []
 
 EFFECTS = {
     "None": "",
@@ -36,14 +29,14 @@ EFFECTS = {
 }
 
 USAGE_FILE = Path("usage_stats.json")
+CAMB_TTS_URL = "https://client.camb.ai/apis/tts-stream"
+CAMB_VOICES_URL = "https://client.camb.ai/apis/list-voices"
 
 
 def split_subtitle_segments(text, max_chars=40):
-    """Split Burmese into natural phrase-length lines for CapCut."""
     clean_text = re.sub(r"\s+", " ", str(text).replace("\r", "")).strip()
     if not clean_text:
         return ["အသံဖိုင်"]
-
     sentences = re.split(r"(?<=[။!?！？])\s*|\n+", clean_text)
     segments = []
     for sentence in sentences:
@@ -52,8 +45,6 @@ def split_subtitle_segments(text, max_chars=40):
             continue
         while len(sentence) > max_chars:
             cut = sentence.rfind(" ", 0, max_chars + 1)
-        # Prefer a nearby space so Burmese words and phrases stay readable;
-        # only hard-split when there is no safe boundary.
             if cut < 5:
                 cut = max_chars
             segments.append(sentence[:cut].strip())
@@ -72,7 +63,6 @@ def _srt_time(seconds):
 
 
 def get_audio_duration(audio_path):
-    """Return the exact duration for MP3 or WAV audio."""
     path = Path(audio_path)
     if path.suffix.lower() == ".wav":
         try:
@@ -80,16 +70,16 @@ def get_audio_duration(audio_path):
                 return wav_file.getnframes() / float(wav_file.getframerate())
         except Exception:
             return None
-    if MP3 is None:
-        return None
-    try:
-        return float(MP3(str(path)).info.length)
-    except Exception:
-        return None
+    if MP3 is not None:
+        try:
+            return float(MP3(str(path)).info.length)
+        except Exception:
+            return None
+    return None
 
 
-def split_tts_chunks(text, max_chars=420):
-    """Split long text into safe TTS requests while preserving reading order."""
+def split_tts_chunks(text, max_chars=2500):
+    """Split text below CAMB.AI's 3000-character request limit."""
     clean_text = re.sub(r"\s+", " ", str(text).replace("\r", "")).strip()
     if not clean_text:
         return ["အသံဖိုင်"]
@@ -112,55 +102,37 @@ def split_tts_chunks(text, max_chars=420):
     return chunks
 
 
-def _strip_id3(mp3_bytes):
-    """Remove an ID3v2 header so MP3 chunks can be joined as one stream."""
-    if not mp3_bytes.startswith(b"ID3") or len(mp3_bytes) < 10:
-        return mp3_bytes
-    size_bytes = mp3_bytes[6:10]
-    size = ((size_bytes[0] & 0x7F) << 21) | ((size_bytes[1] & 0x7F) << 14) | ((size_bytes[2] & 0x7F) << 7) | (size_bytes[3] & 0x7F)
-    return mp3_bytes[10 + size:]
-
-
 def write_segmented_srt(text, output_path, duration_seconds=None):
-    """Write 15-character cues spanning exactly the audio duration."""
     segments = split_subtitle_segments(text)
-    if not segments:
-        segments = ["အသံဖိုင်"]
     total_duration = float(duration_seconds or (len(segments) * 1.6))
     cue_duration = total_duration / len(segments)
     cues = []
     for index, segment in enumerate(segments, 1):
         start = (index - 1) * cue_duration
         end = total_duration if index == len(segments) else index * cue_duration
-        cues.append(
-            f"{index}\n{_srt_time(start)} --> {_srt_time(end)}\n{segment}\n"
-        )
+        cues.append(f"{index}\n{_srt_time(start)} --> {_srt_time(end)}\n{segment}\n")
     Path(output_path).write_text("\n".join(cues), encoding="utf-8")
 
 
 def write_fallback_srt(text, output_path, duration_seconds=30):
-    """Backward-compatible wrapper that now writes segmented SRT cues."""
-    write_segmented_srt(text, output_path)
+    write_segmented_srt(text, output_path, duration_seconds)
 
 
 def increment_usage():
     stats = {"count": 0}
     if USAGE_FILE.exists():
         try:
-            with USAGE_FILE.open("r", encoding="utf-8") as f:
-                stats = json.load(f)
+            stats = json.loads(USAGE_FILE.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             pass
     stats["count"] = stats.get("count", 0) + 1
-    with USAGE_FILE.open("w", encoding="utf-8") as f:
-        json.dump(stats, f)
+    USAGE_FILE.write_text(json.dumps(stats), encoding="utf-8")
 
 
 def get_usage_count():
     if USAGE_FILE.exists():
         try:
-            with USAGE_FILE.open("r", encoding="utf-8") as f:
-                return json.load(f).get("count", 0)
+            return json.loads(USAGE_FILE.read_text(encoding="utf-8")).get("count", 0)
         except (OSError, ValueError):
             return 0
     return 0
@@ -169,79 +141,118 @@ def get_usage_count():
 def _secret_value(name):
     value = os.getenv(name)
     if value:
-        return value
+        return str(value)
     try:
         import streamlit as st
-        return st.secrets.get(name)
+        return str(st.secrets.get(name, ""))
     except Exception:
-        return None
+        return ""
 
 
-def generate_elevenlabs_tts(text, voice_id, rate="+0%", pitch="+0Hz"):
-    """Generate ElevenLabs MP3 audio in safe chunks and create duration-matched SRT."""
-    api_key = (_secret_value("ELEVENLABS_API_KEY") or "").strip()
+def _camb_headers(api_key):
+    return {"x-api-key": api_key, "Content-Type": "application/json"}
+
+
+def get_camb_voices(limit=10):
+    """Return Burmese CAMB voices as app tuples: (id, pitch, name, label)."""
+    api_key = _secret_value("CAMB_API_KEY").strip()
     if not api_key:
-        raise RuntimeError("ELEVENLABS_API_KEY ကို Streamlit Secrets ထဲ ထည့်ပါ။")
-    eleven_voice_id = voice_id.removeprefix("eleven:")
-    chunks = split_tts_chunks(text, max_chars=900)
-    chunk_files = []
-    output_file = Path("output.mp3")
+        raise RuntimeError("CAMB_API_KEY ကို Streamlit Secrets ထဲ ထည့်ပါ။")
+    response = requests.get(CAMB_VOICES_URL, headers={"x-api-key": api_key}, timeout=30)
+    if not response.ok:
+        raise RuntimeError(f"CAMB အသံစာရင်း မရပါ: {response.status_code} {response.text[:500]}")
+    data = response.json()
+    voices = data.get("voices", data) if isinstance(data, dict) else data
+    if not isinstance(voices, list):
+        raise RuntimeError("CAMB အသံစာရင်းပုံစံ မမှန်ပါ။")
+
+    burmese = []
+    for voice in voices:
+        if not isinstance(voice, dict):
+            continue
+        language = str(voice.get("language") or "").lower()
+        name = str(voice.get("voice_name") or voice.get("name") or "CAMB အသံ").strip()
+        # CAMB may return my, my-mm, or a Burmese-labelled voice.
+        if language.startswith("my") or "burmese" in language or "မြန်မာ" in name.lower():
+            voice_id = voice.get("id", voice.get("voice_id"))
+            if voice_id is not None:
+                burmese.append((str(voice_id), "+0Hz", name, name))
+    if not burmese:
+        raise RuntimeError("CAMB.AI မှ မြန်မာအသံ မတွေ့ပါ။ CAMB account ထဲမှာ မြန်မာ voice ရှိ/မရှိ စစ်ပါ။")
+    return burmese[:limit]
+
+
+def _rate_to_float(rate):
+    match = re.search(r"[-+]?\d+(?:\.\d+)?", str(rate or "0"))
+    percent = float(match.group(0)) if match else 0.0
+    return max(0.5, min(2.0, 1.0 + percent / 100.0))
+
+
+def _append_wav_files(paths, output_path):
+    with wave.open(str(output_path), "wb") as out:
+        for index, path in enumerate(paths):
+            with wave.open(str(path), "rb") as src:
+                if index == 0:
+                    out.setnchannels(src.getnchannels())
+                    out.setsampwidth(src.getsampwidth())
+                    out.setframerate(src.getframerate())
+                elif (src.getnchannels(), src.getsampwidth(), src.getframerate()) != (out.getnchannels(), out.getsampwidth(), out.getframerate()):
+                    raise RuntimeError("CAMB အသံအပိုင်းများ၏ audio format မတူပါ။")
+                out.writeframes(src.readframes(src.getnframes()))
+
+
+def generate_camb_tts(text, voice_id, rate="+0%", pitch="+0Hz"):
+    """Generate Burmese WAV audio through CAMB.AI streaming TTS."""
+    api_key = _secret_value("CAMB_API_KEY").strip()
+    if not api_key:
+        raise RuntimeError("CAMB_API_KEY ကို Streamlit Secrets ထဲ ထည့်ပါ။")
+    language = (_secret_value("CAMB_LANGUAGE") or "my-mm").strip().lower()
+    speech_model = (_secret_value("CAMB_SPEECH_MODEL") or "mars-8.1-flash-beta").strip()
+    speaking_rate = _rate_to_float(rate)
+    chunks = split_tts_chunks(text)
+    output_file = Path("output.wav")
     sub_file = Path("output.srt")
-    with tempfile.TemporaryDirectory(prefix="mgkhant_eleven_") as temp_dir:
+
+    with tempfile.TemporaryDirectory(prefix="mgkhant_camb_") as temp_dir:
         temp_path = Path(temp_dir)
+        chunk_files = []
         for index, chunk_text in enumerate(chunks):
+            payload = {
+                "text": chunk_text,
+                "language": language,
+                "voice_id": int(voice_id),
+                "speech_model": speech_model,
+                "output_configuration": {"format": "wav"},
+                "voice_settings": {"speaking_rate": speaking_rate},
+            }
             response = requests.post(
-                f"https://api.elevenlabs.io/v1/text-to-speech/{eleven_voice_id}",
-                headers={"xi-api-key": api_key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
-                params={"output_format": "mp3_44100_128"},
-                json={
-                    "text": chunk_text,
-                    "model_id": "eleven_multilingual_v2",
-                    "voice_settings": {
-                        "stability": 0.5,
-                        "similarity_boost": 0.75,
-                        "style": 0.0,
-                        "use_speaker_boost": True,
-                    },
-                },
-                timeout=90,
+                CAMB_TTS_URL,
+                headers=_camb_headers(api_key),
+                json=payload,
+                stream=True,
+                timeout=180,
             )
             if not response.ok:
-                raise RuntimeError(f"ElevenLabs TTS error {response.status_code}: {response.text[:500]}")
-            chunk_file = temp_path / f"chunk_{index:04d}.mp3"
-            chunk_file.write_bytes(response.content)
+                raise RuntimeError(f"CAMB TTS error {response.status_code}: {response.text[:700]}")
+            chunk_file = temp_path / f"chunk_{index:04d}.wav"
+            with chunk_file.open("wb") as handle:
+                for data in response.iter_content(chunk_size=8192):
+                    if data:
+                        handle.write(data)
             if chunk_file.stat().st_size < 100:
-                raise RuntimeError(f"ElevenLabs audio chunk {index + 1} ဗလာဖြစ်နေပါသည်။")
+                raise RuntimeError(f"CAMB အသံအပိုင်း {index + 1} ဗလာဖြစ်နေပါသည်။")
             chunk_files.append(chunk_file)
-
-        manifest = temp_path / "concat.txt"
-        manifest.write_text("".join(f"file '{path.as_posix()}'\n" for path in chunk_files), encoding="utf-8")
-        try:
-            subprocess.run(
-                ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(manifest), "-c:a", "libmp3lame", "-q:a", "2", str(output_file)],
-                check=True,
-                capture_output=True,
-            )
-        except FileNotFoundError as exc:
-            raise RuntimeError("ffmpeg မတွေ့ပါ။ Streamlit Cloud repository ထဲမှာ packages.txt ဖိုင်နဲ့ ffmpeg ထည့်ပါ။") from exc
-        except subprocess.CalledProcessError as exc:
-            detail = exc.stderr.decode("utf-8", errors="replace")[-500:]
-            raise RuntimeError(f"ElevenLabs MP3 ပေါင်းရာတွင် အမှား: {detail}") from exc
+        _append_wav_files(chunk_files, output_file)
 
     duration = get_audio_duration(output_file)
     if not duration or duration <= 0:
-        raise RuntimeError("ElevenLabs audio duration မရပါ။")
+        raise RuntimeError("CAMB audio duration မရပါ။")
     write_segmented_srt(text, sub_file, duration)
     return output_file, sub_file
 
 
 def run_tts_to_file(text, voice_id, pitch_offset, rate="+0%", suffix="output", api_key=None):
-    """Route the selected ElevenLabs voice."""
-    if voice_id.startswith("eleven:"):
-        audio_path, sub_path = generate_elevenlabs_tts(text, voice_id, rate=rate, pitch=pitch_offset)
-    else:
-        raise RuntimeError("မသိသော ElevenLabs voice ID ဖြစ်ပါသည်။")
-
+    audio_path, sub_path = generate_camb_tts(text, voice_id, rate=rate, pitch=pitch_offset)
     final_audio = Path(f"output_{suffix}{audio_path.suffix}")
     final_srt = Path(f"output_{suffix}.srt")
     shutil.copyfile(audio_path, final_audio)
@@ -250,46 +261,23 @@ def run_tts_to_file(text, voice_id, pitch_offset, rate="+0%", suffix="output", a
     return final_audio, final_srt
 
 
-# ---------------------------------------------------------------------------
-# Audio effects logic
-# ---------------------------------------------------------------------------
+def change_tempo(input_path, tempo):
+    # CAMB controls speaking rate at generation time; retain this helper for compatibility.
+    return Path(input_path)
 
 
 def apply_effects(input_path, effect_name, tempo=1.0):
-    input_path = Path(input_path)
-    output_path = input_path.parent / f"effect_{input_path.name}"
-    filter_str = EFFECTS.get(effect_name, "")
-
-    if tempo != 1.0:
-        filter_str = f"{filter_str},atempo={tempo}" if filter_str else f"atempo={tempo}"
-
-    command = ["ffmpeg", "-y", "-i", str(input_path)]
-    if filter_str:
-        command += ["-af", filter_str]
-    command += [str(output_path)]
-    subprocess.run(command, check=True, capture_output=True)
-    return output_path
-
-
-def change_tempo(input_path, tempo):
-    input_path = Path(input_path)
-    output_path = input_path.parent / f"tempo_{input_path.name}"
-    subprocess.run(
-        ["ffmpeg", "-y", "-i", str(input_path), "-af", f"atempo={tempo}", str(output_path)],
-        check=True,
-        capture_output=True,
-    )
-    return output_path
+    return Path(input_path)
 
 
 __all__ = [
     "FEATURED_VOICES",
     "EFFECTS",
-    "generate_elevenlabs_tts",
+    "get_camb_voices",
+    "generate_camb_tts",
     "change_tempo",
     "get_usage_count",
     "run_tts_to_file",
     "apply_effects",
-]
-
-
+            ]
+                                 
