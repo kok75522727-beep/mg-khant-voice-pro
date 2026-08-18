@@ -8,9 +8,14 @@ import re
 import requests
 
 from voice_engine import (
-    get_voicemaker_voices,
+    get_google_voices,
     change_tempo, get_usage_count, run_tts_to_file
 )
+
+try:
+    from streamlit_local_storage import LocalStorage
+except ImportError:
+    LocalStorage = None
 
 # ---------------------------------------------------------------------------
 # Page config & Custom CSS
@@ -323,6 +328,44 @@ def audio_player(path):
     audio_format = "audio/wav" if path.suffix.lower() == ".wav" else "audio/mp3"
     st.audio(b64_audio(path), format=audio_format)
 
+def _get_google_key(storage):
+    key = st.session_state.get("google_api_key", "")
+    if key:
+        return key
+    if storage is not None:
+        try:
+            key = storage.getItem("mgkhant_google_api_key") or ""
+        except Exception:
+            key = ""
+    if key:
+        st.session_state["google_api_key"] = key
+    return key
+
+
+def _save_google_key(storage, key):
+    clean = str(key or "").strip()
+    if not clean:
+        return ""
+    st.session_state["google_api_key"] = clean
+    st.session_state["google_key_needs_reentry"] = False
+    if storage is not None:
+        try:
+            storage.setItem("mgkhant_google_api_key", clean)
+        except Exception:
+            pass
+    return clean
+
+
+def _clear_google_key(storage):
+    st.session_state.pop("google_api_key", None)
+    st.session_state["google_key_needs_reentry"] = True
+    if storage is not None:
+        try:
+            storage.deleteItem("mgkhant_google_api_key")
+        except Exception:
+            pass
+
+
 def render_section(num, title):
     st.markdown(f"""
     <div class="clean-header">
@@ -336,6 +379,29 @@ def render_section(num, title):
 # ---------------------------------------------------------------------------
 
 def tts_page():
+    storage = LocalStorage() if LocalStorage is not None else None
+    saved_google_key = _get_google_key(storage)
+    key_needs_reentry = st.session_state.get("google_key_needs_reentry", False)
+
+    with st.container(border=True):
+        render_section("K", "Google AI Studio API Key")
+        if saved_google_key and not key_needs_reentry:
+            st.success("✅ Google API key ကို ဒီစက်မှာ သိမ်းထားပြီးပါပြီ။")
+            if st.button("🔑 Key ပြန်ပြောင်းမည်", use_container_width=True):
+                _clear_google_key(storage)
+                st.rerun()
+        else:
+            entered_key = st.text_input(
+                "Google AI Studio API key",
+                type="password",
+                placeholder="AIza...",
+                label_visibility="collapsed",
+                help="Google AI Studio မှာ key ယူပြီး ဒီနေရာထည့်ပါ။ Key ကို browser local storage ထဲ အလိုအလျောက်သိမ်းပါမယ်။",
+            )
+            if entered_key.strip():
+                saved_google_key = _save_google_key(storage, entered_key)
+                st.success("✅ Key သိမ်းပြီးပါပြီ။ နောက်တစ်ကြိမ် ပြန်ထည့်စရာမလိုပါ။")
+
     # No fixed character limit in the text box. The selected TTS provider's
     # credits/quota and the engine's safe chunking remain the practical limits.
     if not telegram_access_gate():
@@ -359,12 +425,11 @@ def tts_page():
         
         render_section("2", "အသံအမျိုးအစား ရွေးချယ်ခြင်း")
         try:
-            voicemaker_voices = get_voicemaker_voices(limit=10)
+            google_voices = get_google_voices(limit=10)
         except Exception as exc:
-            st.error(f"❌ VoiceMaker အသံစာရင်း မရပါ: {exc}")
-            st.info("Streamlit Secrets ထဲမှာ VOICEMAKER_API_KEY ထည့်ထားပြီး VoiceMaker account ကို စစ်ပါ။")
+            st.error(f"❌ Google အသံစာရင်း မရပါ: {exc}")
             return
-        voice_options = [voice[3] for voice in voicemaker_voices]
+        voice_options = [voice[3] for voice in google_voices]
         selected_voice_str = st.radio(
             "အသံရွေးပါ",
             options=voice_options,
@@ -373,7 +438,7 @@ def tts_page():
             label_visibility="collapsed"
         )
         selected_idx = voice_options.index(selected_voice_str)
-        voice_id, pitch_offset, name, label = voicemaker_voices[selected_idx]
+        voice_id, pitch_offset, name, label = google_voices[selected_idx]
 
         col_speed, col_pitch = st.columns(2)
         with col_speed:
@@ -429,9 +494,10 @@ def tts_page():
                     audio_path, srt_path = run_tts_to_file(
                         action_text,
                         voice_id,
-                        pitch_str,
-                        rate=rate_str,
+                        pitch_value,
+                        rate=speed,
                         suffix="custom",
+                        api_key=saved_google_key,
                     )
                     
                     safe_filename = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "_", filename_input.strip()).strip(" ._")
@@ -447,7 +513,12 @@ def tts_page():
                     # unexpectedly reappear after a long generation or a transient
                     # network/API failure. The user can use "Key ပြန်ပြောင်းမည်"
                     # manually when a different key is needed.
-                    st.error(f"❌ အမှားအယွင်း ဖြစ်ပေါ်သည်: {error_text}")
+                    if "GOOGLE_QUOTA_EXCEEDED" in error_text or "429" in error_text or "quota" in error_text.lower():
+                        _clear_google_key(storage)
+                        st.error("❌ Google API quota ပြည့်သွားပါပြီ။ Key အသစ်ထည့်ပါ။")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ အမှားအယွင်း ဖြစ်ပေါ်သည်: {error_text}")
 
     if "last_audio" in st.session_state:
         with st.container(border=True):
