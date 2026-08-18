@@ -9,7 +9,6 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-import edge_tts
 import requests
 
 try:
@@ -18,21 +17,11 @@ except ImportError:
     MP3 = None
 
 # ---------------------------------------------------------------------------
-# Voice list: first two are the existing Myanmar Edge voices; the next eight
-# are ElevenLabs voice slots. The names shown in the UI are labels only.
+# ElevenLabs voices shown in the UI.
 # ---------------------------------------------------------------------------
 
 FEATURED_VOICES = [
-    ("edge:my-MM-ThihaNeural", "+0Hz", "Thiha", "မြန်မာအသံ (Thiha)"),
-    ("edge:my-MM-NilarNeural", "+0Hz", "Nilar", "မြန်မာအသံ (Nilar)"),
-    ("google:Kore", "+0Hz", "ကိုဇင်မင်း", "Google Voice 1 (Kore)"),
-    ("google:Puck", "+0Hz", "ကိုထက်အောင်", "Google Voice 2 (Puck)"),
-    ("google:Charon", "+0Hz", "ကိုရဲမင်း", "Google Voice 3 (Charon)"),
-    ("google:Fenrir", "+0Hz", "ကိုသီဟ", "Google Voice 4 (Fenrir)"),
-    ("google:Aoede", "+0Hz", "မေသက်", "Google Voice 5 (Aoede)"),
-    ("google:Leda", "+0Hz", "သဇင်", "Google Voice 6 (Leda)"),
-    ("google:Orus", "+0Hz", "နွယ်နွယ်", "Google Voice 7 (Orus)"),
-    ("google:Zephyr", "+0Hz", "အိမ့်ချစ်", "Google Voice 8 (Zephyr)"),
+    ("eleven:dnWAVXtxJA3yQY68LcL7", "+0Hz", "စိုင်းစိုင်း", "စိုင်းစိုင်း"),
 ]
 
 EFFECTS = {
@@ -177,73 +166,6 @@ def get_usage_count():
     return 0
 
 
-async def generate_edge_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz"):
-    """Generate Thiha/Nilar long text and join complete MP3 chunks reliably."""
-    output_file = Path("output.mp3")
-    sub_file = Path("output.srt")
-    with tempfile.TemporaryDirectory(prefix="mgkhant_edge_") as temp_dir:
-        temp_path = Path(temp_dir)
-        chunk_files = []
-        for index, chunk_text in enumerate(split_tts_chunks(text, max_chars=420)):
-            chunk_file = temp_path / f"chunk_{index:04d}.mp3"
-            communicate = edge_tts.Communicate(
-                chunk_text, voice, rate=rate, volume=volume, pitch=pitch
-            )
-            with chunk_file.open("wb") as chunk_output:
-                async for chunk in communicate.stream():
-                    if chunk["type"] == "audio":
-                        chunk_output.write(chunk["data"])
-            if not chunk_file.exists() or chunk_file.stat().st_size < 100:
-                raise RuntimeError(f"Edge TTS chunk {index + 1} ဗလာဖြစ်နေပါသည်။")
-            chunk_files.append(chunk_file)
-
-        silence_file = temp_path / "join_silence.mp3"
-        manifest = temp_path / "concat.txt"
-        try:
-            subprocess.run(
-                [
-                    "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-                    "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
-                    "-t", "0.06", "-c:a", "libmp3lame", "-q:a", "9",
-                    str(silence_file),
-                ],
-                check=True,
-                capture_output=True,
-            )
-            concat_files = []
-            for index, chunk_file in enumerate(chunk_files):
-                concat_files.append(chunk_file)
-                if index < len(chunk_files) - 1:
-                    concat_files.append(silence_file)
-            manifest.write_text(
-                "".join(f"file '{path.as_posix()}'\n" for path in concat_files),
-                encoding="utf-8",
-            )
-            subprocess.run(
-                [
-                    "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-                    "-f", "concat", "-safe", "0", "-i", str(manifest),
-                    "-af", "aresample=async=1:first_pts=0",
-                    "-c:a", "libmp3lame", "-q:a", "2", str(output_file),
-                ],
-                check=True,
-                capture_output=True,
-            )
-        except FileNotFoundError as exc:
-            raise RuntimeError(
-                "ffmpeg မတွေ့ပါ။ Streamlit Cloud repository ထဲမှာ packages.txt ဖိုင်နဲ့ ffmpeg ထည့်ပါ။"
-            ) from exc
-        except subprocess.CalledProcessError as exc:
-            detail = exc.stderr.decode("utf-8", errors="replace")[-500:]
-            raise RuntimeError(f"MP3 အပိုင်းများပေါင်းရာတွင် အမှား: {detail}") from exc
-
-    duration = get_audio_duration(output_file)
-    if not duration or duration <= 0:
-        raise RuntimeError("ပေါင်းပြီးသော Edge audio duration မရပါ။")
-    write_segmented_srt(text, sub_file, duration)
-    return output_file, sub_file
-
-
 def _secret_value(name):
     value = os.getenv(name)
     if value:
@@ -255,147 +177,70 @@ def _secret_value(name):
         return None
 
 
-def _write_pcm_wav(output_file, pcm_bytes, sample_rate=24000, channels=1, sample_width=2):
-    """Wrap Gemini's 24 kHz PCM response in a playable WAV container."""
-    with wave.open(str(output_file), "wb") as wav_file:
-        wav_file.setnchannels(channels)
-        wav_file.setsampwidth(sample_width)
-        wav_file.setframerate(sample_rate)
-        wav_file.writeframes(pcm_bytes)
-
-
-def _request_google_pcm(text, voice_name, api_key, speed_multiplier, pitch_value):
-    """Request one safe-sized Gemini TTS chunk and return raw PCM bytes."""
-    speed_instruction = f"Speak at approximately {speed_multiplier:.2f}x speed."
-    if pitch_value > 0:
-        pitch_instruction = f"Use a slightly higher pitch, about {abs(pitch_value):.0f} percent above normal."
-    elif pitch_value < 0:
-        pitch_instruction = f"Use a slightly lower pitch, about {abs(pitch_value):.0f} percent below normal."
-    else:
-        pitch_instruction = "Use a natural, normal pitch."
-    # Premium ကိုသီဟ uses Fenrir and is intended as the playful/comedy voice.
-    if voice_name == "Fenrir":
-        style_instruction = (
-            "Use a playful, humorous Myanmar narration style with lively energy, "
-            "natural comic timing, light reaction, and a friendly smile in the voice. "
-            "Keep Burmese pronunciation clear and do not overact."
-        )
-    else:
-        style_instruction = "Use a natural, clear narration style."
-    tts_prompt = (
-        "Read the following text aloud exactly as written. "
-        f"{style_instruction} {speed_instruction} {pitch_instruction} "
-        "Do not translate, summarize, add, or remove words.\n\n"
-        f"Text:\n{text}"
-    )
-    endpoint = (
-        "https://generativelanguage.googleapis.com/v1beta/"
-        "models/gemini-3.1-flash-tts-preview:generateContent"
-    )
-    response = requests.post(
-        endpoint,
-        headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
-        json={
-            "contents": [{"parts": [{"text": tts_prompt}]}],
-            "generationConfig": {
-                "responseModalities": ["AUDIO"],
-                "speechConfig": {
-                    "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice_name}}
-                },
-            },
-        },
-        timeout=45,
-    )
-    if not response.ok:
-        raise RuntimeError(f"Google Gemini TTS error {response.status_code}: {response.text[:400]}")
-    payload = response.json()
-    try:
-        candidate = (payload.get("candidates") or [])[0]
-        parts = (candidate.get("content") or {}).get("parts") or []
-        part = next((item for item in parts if item.get("inlineData") or item.get("inline_data")), None)
-        if not part:
-            reason = candidate.get("finishReason", "unknown")
-            raise RuntimeError(f"Google TTS audio မပြန်ပါ။ finishReason={reason}.")
-        inline_data = part.get("inlineData") or part.get("inline_data") or {}
-        return base64.b64decode(inline_data["data"])
-    except RuntimeError:
-        raise
-    except (KeyError, IndexError, TypeError, ValueError) as exc:
-        raise RuntimeError(f"Google TTS audio response မရပါ: {payload}") from exc
-
-
-def generate_google_tts(text, voice, rate="+0%", volume="+0%", pitch="+0Hz", api_key=None):
-    """Generate Google Gemini TTS using a user key first, then the app secret."""
-    # The user key is passed in memory for this request only; it is not saved
-    # to a file or written to Streamlit Secrets.
-    api_key = (api_key or "").strip() or _secret_value("GOOGLE_API_KEY") or _secret_value("GEMINI_API_KEY")
-    voice_name = voice.rsplit(":", 1)[-1]
+def generate_elevenlabs_tts(text, voice_id, rate="+0%", pitch="+0Hz"):
+    """Generate ElevenLabs MP3 audio in safe chunks and create duration-matched SRT."""
+    api_key = (_secret_value("ELEVENLABS_API_KEY") or "").strip()
     if not api_key:
-        raise RuntimeError("Google voice သုံးရန် Google AI Studio API Key ထည့်ပါ။")
-    # HTTP headers use ASCII/Latin-1-compatible values. Burmese text, spaces,
-    # quotes, or a pasted label must never be sent as the API key header.
-    try:
-        api_key.encode("ascii")
-    except UnicodeEncodeError as exc:
-        raise RuntimeError(
-            "Google API Key မမှန်ပါ။ API Key box ထဲမှာ Google AI Studio က Copy လုပ်ထားတဲ့ "
-            "အင်္ဂလိပ်အက္ခရာ/နံပါတ် key ကိုပဲ ထည့်ပါ။ မြန်မာစာ၊ space သို့မဟုတ် label မထည့်ပါနှင့်။"
-        ) from exc
-    if any(char.isspace() for char in api_key):
-        raise RuntimeError(
-            "Google API Key မမှန်ပါ။ Key ကို အစ/အဆုံး space မပါဘဲ ပြန်ကူးထည့်ပါ။"
-        )
-    try:
-        rate_percent = float(str(rate).replace("%", "").replace("+", ""))
-    except ValueError:
-        rate_percent = 0.0
-    speed_multiplier = max(0.5, min(2.0, 1.0 + rate_percent / 100.0))
-    try:
-        pitch_value = float(str(pitch).replace("Hz", "").replace("+", ""))
-    except ValueError:
-        pitch_value = 0.0
-
-    # Keep each Gemini request bounded so a long Burmese text does not leave
-    # the app waiting on one oversized generation request.
-    text_chunks = split_tts_chunks(text, max_chars=600)
-    pcm_chunks = []
-    for chunk in text_chunks:
-        pcm_chunks.append(
-            _request_google_pcm(
-                chunk, voice_name, api_key, speed_multiplier, pitch_value
-            )
-        )
-
-    # Gemini returns 24 kHz, mono, 16-bit PCM. Add a very small PCM silence gap
-    # between chunks to avoid clipped words while keeping the final audio smooth.
-    silence_frames = int(24000 * 0.04)
-    silence_gap = b"\x00\x00" * silence_frames
-    pcm_bytes = silence_gap.join(pcm_chunks)
-    output_file = Path("output.wav")
+        raise RuntimeError("ELEVENLABS_API_KEY ကို Streamlit Secrets ထဲ ထည့်ပါ။")
+    eleven_voice_id = voice_id.removeprefix("eleven:")
+    chunks = split_tts_chunks(text, max_chars=900)
+    chunk_files = []
+    output_file = Path("output.mp3")
     sub_file = Path("output.srt")
-    _write_pcm_wav(output_file, pcm_bytes)
-    write_segmented_srt(text, sub_file, get_audio_duration(output_file))
+    with tempfile.TemporaryDirectory(prefix="mgkhant_eleven_") as temp_dir:
+        temp_path = Path(temp_dir)
+        for index, chunk_text in enumerate(chunks):
+            response = requests.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{eleven_voice_id}",
+                headers={"xi-api-key": api_key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
+                params={"output_format": "mp3_44100_128"},
+                json={
+                    "text": chunk_text,
+                    "model_id": "eleven_multilingual_v2",
+                    "voice_settings": {
+                        "stability": 0.5,
+                        "similarity_boost": 0.75,
+                        "style": 0.0,
+                        "use_speaker_boost": True,
+                    },
+                },
+                timeout=90,
+            )
+            if not response.ok:
+                raise RuntimeError(f"ElevenLabs TTS error {response.status_code}: {response.text[:500]}")
+            chunk_file = temp_path / f"chunk_{index:04d}.mp3"
+            chunk_file.write_bytes(response.content)
+            if chunk_file.stat().st_size < 100:
+                raise RuntimeError(f"ElevenLabs audio chunk {index + 1} ဗလာဖြစ်နေပါသည်။")
+            chunk_files.append(chunk_file)
+
+        manifest = temp_path / "concat.txt"
+        manifest.write_text("".join(f"file '{path.as_posix()}'\n" for path in chunk_files), encoding="utf-8")
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(manifest), "-c:a", "libmp3lame", "-q:a", "2", str(output_file)],
+                check=True,
+                capture_output=True,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError("ffmpeg မတွေ့ပါ။ Streamlit Cloud repository ထဲမှာ packages.txt ဖိုင်နဲ့ ffmpeg ထည့်ပါ။") from exc
+        except subprocess.CalledProcessError as exc:
+            detail = exc.stderr.decode("utf-8", errors="replace")[-500:]
+            raise RuntimeError(f"ElevenLabs MP3 ပေါင်းရာတွင် အမှား: {detail}") from exc
+
+    duration = get_audio_duration(output_file)
+    if not duration or duration <= 0:
+        raise RuntimeError("ElevenLabs audio duration မရပါ။")
+    write_segmented_srt(text, sub_file, duration)
     return output_file, sub_file
 
 
 def run_tts_to_file(text, voice_id, pitch_offset, rate="+0%", suffix="output", api_key=None):
-    """Route the two Edge voices and eight Google Gemini TTS voices."""
-    if voice_id.startswith("google:"):
-        audio_path, sub_path = generate_google_tts(
-            text, voice_id, rate=rate, pitch=pitch_offset, api_key=api_key
-        )
-    elif voice_id.startswith("edge:"):
-        edge_voice = voice_id.removeprefix("edge:")
-        loop = asyncio.new_event_loop()
-        try:
-            asyncio.set_event_loop(loop)
-            audio_path, sub_path = loop.run_until_complete(
-                generate_edge_tts(text, edge_voice, rate=rate, pitch=pitch_offset)
-            )
-        finally:
-            loop.close()
+    """Route the selected ElevenLabs voice."""
+    if voice_id.startswith("eleven:"):
+        audio_path, sub_path = generate_elevenlabs_tts(text, voice_id, rate=rate, pitch=pitch_offset)
     else:
-        raise RuntimeError("မသိသော voice ID ဖြစ်ပါသည်။ Edge သို့မဟုတ် ElevenLabs voice ကို ရွေးပါ။")
+        raise RuntimeError("မသိသော ElevenLabs voice ID ဖြစ်ပါသည်။")
 
     final_audio = Path(f"output_{suffix}{audio_path.suffix}")
     final_srt = Path(f"output_{suffix}.srt")
@@ -440,9 +285,11 @@ def change_tempo(input_path, tempo):
 __all__ = [
     "FEATURED_VOICES",
     "EFFECTS",
+    "generate_elevenlabs_tts",
     "change_tempo",
     "get_usage_count",
     "run_tts_to_file",
     "apply_effects",
 ]
+
 
