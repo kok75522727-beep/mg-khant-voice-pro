@@ -1,54 +1,66 @@
-"""VoiceMaker.in Burmese TTS engine for the Mg Khant AI Streamlit app."""
+"""Google AI Studio Gemini TTS engine for the Mg Khant AI Burmese app."""
 
+import base64
 import json
 import os
 import re
-import shutil
-import subprocess
 import tempfile
 import wave
 from pathlib import Path
-from urllib.parse import urljoin
 
 import requests
 
-try:
-    from mutagen.mp3 import MP3
-except ImportError:
-    MP3 = None
+GOOGLE_TTS_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
+GOOGLE_TTS_MODEL = "gemini-2.5-flash-preview-tts"
+GOOGLE_TTS_SAMPLE_RATE = 24000
+GOOGLE_TTS_CHUNK_CHARS = 2800
+USAGE_FILE = Path("usage_stats.json")
 
-VOICE_MAKER_TTS_URL = "https://developer.voicemaker.in/api/v1/voice/convert"
-VOICE_MAKER_VOICE_ID = "ai3-my-MM-Khine"
-VOICE_MAKER_LANGUAGE = "my-MM"
-VOICE_MAKER_ENGINE = "neural"
-VOICE_MAKER_CHUNK_CHARS = 4000
+# The API uses one selected prebuilt voice per request. The Burmese names are
+# local labels; the style instructions make the ten choices audibly distinct.
+VOICE_PROFILES = [
+    {"id": "Kore", "pitch": 0, "name": "ရွှေနေ", "label": "ရွှေနေ — တည်ငြိမ်အမျိုးသား"},
+    {"id": "Puck", "pitch": 2, "name": "သီဟ", "label": "သီဟ — တက်ကြွအမျိုးသား"},
+    {"id": "Charon", "pitch": -3, "name": "မင်းခန့်", "label": "မင်းခန့် — နက်ရှိုင်းအမျိုးသား"},
+    {"id": "Fenrir", "pitch": -5, "name": "နေတိုး", "label": "နေတိုး — အားကောင်းအမျိုးသား"},
+    {"id": "Aoede", "pitch": 4, "name": "နီလာ", "label": "နီလာ — နူးညံ့အမျိုးသမီး"},
+    {"id": "Leda", "pitch": 2, "name": "မေသဇင်", "label": "မေသဇင် — ရှင်းလင်းအမျိုးသမီး"},
+    {"id": "Zephyr", "pitch": 5, "name": "သွန်းဝတီ", "label": "သွန်းဝတီ — ချိုသာအမျိုးသမီး"},
+    {"id": "Kore", "pitch": 7, "name": "ကြယ်စင်", "label": "ကြယ်စင် — မြန်ဆန်တက်ကြွ"},
+    {"id": "Puck", "pitch": 8, "name": "ဟာသလေး", "label": "ဟာသလေး — ပျော်စရာဟာသအသံ"},
+    {"id": "Charon", "pitch": 1, "name": "သတင်းဖတ်သူ", "label": "သတင်းဖတ်သူ — ပရော်ဖက်ရှင်နယ်"},
+]
+FEATURED_VOICES = [(v["id"], v["pitch"], v["name"], v["label"]) for v in VOICE_PROFILES]
 
-FEATURED_VOICES = [(VOICE_MAKER_VOICE_ID, "+0Hz", "စိုင်းစိုင်း", "စိုင်းစိုင်း")]
+PROFILE_STYLES = {
+    ("Kore", 0): "Use a calm, balanced Burmese male delivery with natural pauses.",
+    ("Puck", 2): "Use an energetic Burmese male delivery with bright emphasis.",
+    ("Charon", -3): "Use a deep, serious Burmese male delivery with measured pauses.",
+    ("Fenrir", -5): "Use a strong, confident Burmese male delivery with firm emphasis.",
+    ("Aoede", 4): "Use a gentle, warm Burmese female delivery with a soft tone.",
+    ("Leda", 2): "Use a clear, polished Burmese female delivery suitable for explanations.",
+    ("Zephyr", 5): "Use a cheerful, friendly Burmese female delivery with a bright tone.",
+    ("Kore", 7): "Use a quick, lively Burmese delivery while keeping pronunciation clear.",
+    ("Puck", 8): "Use playful comic timing, expressive reactions, and a light humorous Burmese tone.",
+    ("Charon", 1): "Use a precise, authoritative Burmese news-reader delivery.",
+}
 
 EFFECTS = {
     "None": "",
-    "Chipmunk (High Pitch)": "asetrate=44100*1.5,atempo=1/1.5",
-    "Deep (Low Pitch)": "asetrate=44100*0.7,atempo=1/0.7",
-    "Robot": "aformat=sample_fmts=s16:sample_rates=44100,aecho=0.8:0.88:6:0.4",
-    "Echo": "aecho=0.8:0.9:1000:0.3",
-    "Giant": "asetrate=44100*0.6,atempo=1/0.6,aecho=0.8:0.9:20:0.5",
-    "Underwater": "lowpass=f=500",
-    "Radio": "highpass=f=500,lowpass=f=3000",
+    "ဟာသပုံစံ": "Speak with playful comic timing and a light, humorous tone.",
+    "သတင်းဖတ်ပုံစံ": "Speak clearly and professionally like a Burmese news reader.",
+    "ဇာတ်လမ်းပြောပုံစံ": "Speak warmly and expressively like a storyteller.",
 }
-
-USAGE_FILE = Path("usage_stats.json")
 
 
 def split_subtitle_segments(text, max_chars=40):
-    clean_text = re.sub(r"\s+", " ", str(text).replace("\r", "")).strip()
-    if not clean_text:
+    clean = re.sub(r"\s+", " ", str(text).replace("\r", "")).strip()
+    if not clean:
         return ["အသံဖိုင်"]
-    sentences = re.split(r"(?<=[။!?！？])\s*|\n+", clean_text)
+    sentences = re.split(r"(?<=[။!?！？])\s*|\n+", clean)
     segments = []
     for sentence in sentences:
         sentence = sentence.strip()
-        if not sentence:
-            continue
         while len(sentence) > max_chars:
             cut = sentence.rfind(" ", 0, max_chars + 1)
             if cut < 5:
@@ -57,48 +69,31 @@ def split_subtitle_segments(text, max_chars=40):
             sentence = sentence[cut:].lstrip()
         if sentence:
             segments.append(sentence)
-    return segments or [clean_text]
+    return segments or [clean]
 
 
 def _srt_time(seconds):
-    total_ms = max(0, int(round(seconds * 1000)))
-    hours, remainder = divmod(total_ms, 3_600_000)
-    minutes, remainder = divmod(remainder, 60_000)
-    secs, millis = divmod(remainder, 1000)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+    millis = max(0, int(round(seconds * 1000)))
+    hours, rem = divmod(millis, 3600000)
+    minutes, rem = divmod(rem, 60000)
+    secs, ms = divmod(rem, 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}"
 
 
-def get_audio_duration(audio_path):
-    path = Path(audio_path)
-    if path.suffix.lower() == ".wav":
-        try:
-            with wave.open(str(path), "rb") as wav_file:
-                return wav_file.getnframes() / float(wav_file.getframerate())
-        except Exception:
-            return None
-    if MP3 is not None:
-        try:
-            return float(MP3(str(path)).info.length)
-        except Exception:
-            pass
+def get_audio_duration(path):
     try:
-        result = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
-            check=True, capture_output=True, text=True, timeout=30,
-        )
-        return float(result.stdout.strip())
+        with wave.open(str(path), "rb") as wf:
+            return wf.getnframes() / float(wf.getframerate())
     except Exception:
         return None
 
 
-def split_tts_chunks(text, max_chars=VOICE_MAKER_CHUNK_CHARS):
-    """Split long Burmese text at punctuation or spaces before the API call."""
-    clean_text = re.sub(r"\s+", " ", str(text).replace("\r", "")).strip()
-    if not clean_text:
-        return ["အသံဖိုင်"]
-    chunks = []
-    remaining = clean_text
+def split_tts_chunks(text, max_chars=GOOGLE_TTS_CHUNK_CHARS):
+    clean = re.sub(r"\s+", " ", str(text).replace("\r", "")).strip()
+    if not clean:
+        return ["မင်္ဂလာပါ။"]
+    result = []
+    remaining = clean
     punctuation = "။!?！？,၊;:"
     while len(remaining) > max_chars:
         window = remaining[: max_chars + 1]
@@ -109,171 +104,162 @@ def split_tts_chunks(text, max_chars=VOICE_MAKER_CHUNK_CHARS):
             cut = max_chars
         else:
             cut += 1
-        chunks.append(remaining[:cut].strip())
+        result.append(remaining[:cut].strip())
         remaining = remaining[cut:].lstrip()
     if remaining:
-        chunks.append(remaining)
-    return chunks
+        result.append(remaining)
+    return result
 
 
 def write_segmented_srt(text, output_path, duration_seconds=None):
     segments = split_subtitle_segments(text)
-    total_duration = float(duration_seconds or (len(segments) * 1.6))
-    cue_duration = total_duration / len(segments)
+    duration = float(duration_seconds or len(segments) * 1.6)
+    each = duration / len(segments)
     cues = []
-    for index, segment in enumerate(segments, 1):
-        start = (index - 1) * cue_duration
-        end = total_duration if index == len(segments) else index * cue_duration
-        cues.append(f"{index}\n{_srt_time(start)} --> {_srt_time(end)}\n{segment}\n")
+    for i, segment in enumerate(segments, 1):
+        start = (i - 1) * each
+        end = duration if i == len(segments) else i * each
+        cues.append(f"{i}\n{_srt_time(start)} --> {_srt_time(end)}\n{segment}\n")
     Path(output_path).write_text("\n".join(cues), encoding="utf-8")
-
-
-def write_fallback_srt(text, output_path, duration_seconds=30):
-    write_segmented_srt(text, output_path, duration_seconds)
 
 
 def increment_usage():
     stats = {"count": 0}
-    if USAGE_FILE.exists():
-        try:
+    try:
+        if USAGE_FILE.exists():
             stats = json.loads(USAGE_FILE.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            pass
-    stats["count"] = stats.get("count", 0) + 1
+    except (OSError, ValueError):
+        pass
+    stats["count"] = int(stats.get("count", 0)) + 1
     USAGE_FILE.write_text(json.dumps(stats), encoding="utf-8")
 
 
 def get_usage_count():
-    if USAGE_FILE.exists():
-        try:
-            return json.loads(USAGE_FILE.read_text(encoding="utf-8")).get("count", 0)
-        except (OSError, ValueError):
-            return 0
-    return 0
-
-
-def _secret_value(name):
-    value = os.getenv(name)
-    if value:
-        return str(value)
     try:
-        import streamlit as st
-        return str(st.secrets.get(name, ""))
-    except Exception:
-        return ""
+        return int(json.loads(USAGE_FILE.read_text(encoding="utf-8")).get("count", 0)) if USAGE_FILE.exists() else 0
+    except (OSError, ValueError):
+        return 0
 
 
-def get_voicemaker_voices(limit=10):
-    """Return the configured Burmese VoiceMaker voice."""
-    api_key = _secret_value("VOICEMAKER_API_KEY").strip()
-    if not api_key:
-        raise RuntimeError("VOICEMAKER_API_KEY ကို Streamlit Secrets ထဲ ထည့်ပါ။")
+def get_google_voices(limit=10):
     return FEATURED_VOICES[:limit]
 
 
-def _as_api_number(value, default=0):
-    match = re.search(r"[-+]?\d+(?:\.\d+)?", str(value or ""))
-    return int(float(match.group(0))) if match else default
+def get_voicemaker_voices(limit=10):
+    """Compatibility name for app versions that still import this symbol."""
+    return get_google_voices(limit)
 
 
-def _speed_to_master_speed(rate):
-    return max(-100, min(100, _as_api_number(rate, 0)))
+def _pcm_to_wav(pcm_bytes, output_path, sample_rate=GOOGLE_TTS_SAMPLE_RATE):
+    with wave.open(str(output_path), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm_bytes)
 
 
-def _pitch_to_master_pitch(pitch):
-    return max(-100, min(100, _as_api_number(pitch, 0)))
-
-
-def _append_mp3_files(paths, output_path):
-    """Concatenate MP3 chunks with ffmpeg's concat demuxer using safe paths."""
-    concat_file = Path(output_path).with_suffix(".concat.txt")
-    try:
-        lines = []
+def _merge_wav_files(paths, output_path):
+    with wave.open(str(output_path), "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(GOOGLE_TTS_SAMPLE_RATE)
         for path in paths:
-            safe_path = Path(path).resolve().as_posix().replace("'", "'\\''")
-            lines.append(f"file '{safe_path}'")
-        concat_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        subprocess.run(
-            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-f", "concat",
-             "-safe", "0", "-i", str(concat_file), "-c", "copy", str(output_path)],
-            check=True, capture_output=True, text=True, timeout=300,
-        )
-    except FileNotFoundError as exc:
-        raise RuntimeError("ffmpeg မတွေ့ပါ။ Streamlit deployment environment တွင် ffmpeg ထည့်ပါ။") from exc
-    except subprocess.CalledProcessError as exc:
-        raise RuntimeError(f"MP3 အပိုင်းများပေါင်းရာတွင် အမှား: {exc.stderr[-1000:]}") from exc
-    finally:
-        try:
-            concat_file.unlink()
-        except OSError:
-            pass
+            with wave.open(str(path), "rb") as part:
+                if part.getnchannels() != 1 or part.getsampwidth() != 2 or part.getframerate() != GOOGLE_TTS_SAMPLE_RATE:
+                    raise RuntimeError("Google အသံအပိုင်းများ၏ audio format မတူပါ။")
+                out.writeframes(part.readframes(part.getnframes()))
 
 
-def _download_audio(audio_url, target_path, api_key):
-    if not audio_url:
-        raise RuntimeError("VoiceMaker response ထဲမှာ audio path မတွေ့ပါ။")
-    absolute_url = urljoin(VOICE_MAKER_TTS_URL, str(audio_url))
-    response = requests.get(absolute_url, headers={"Authorization": f"Bearer {api_key}"}, timeout=180)
-    if not response.ok:
-        raise RuntimeError(f"VoiceMaker audio download error {response.status_code}: {response.text[:700]}")
-    target_path.write_bytes(response.content)
-    if target_path.stat().st_size < 100:
-        raise RuntimeError("VoiceMaker အသံအပိုင်း ဗလာဖြစ်နေပါသည်။")
+def _extract_inline_audio(payload):
+    candidates = payload.get("candidates") or []
+    for candidate in candidates:
+        parts = (candidate.get("content") or {}).get("parts") or []
+        for part in parts:
+            inline = part.get("inlineData") or part.get("inline_data")
+            if inline and inline.get("data"):
+                return inline
+    return None
 
 
-def generate_voicemaker_tts(text, voice_id=VOICE_MAKER_VOICE_ID, rate="+0%", pitch="+0Hz"):
-    """Generate Burmese MP3 audio through VoiceMaker and create an SRT file."""
-    api_key = _secret_value("VOICEMAKER_API_KEY").strip()
-    if not api_key:
-        raise RuntimeError("VOICEMAKER_API_KEY ကို Streamlit Secrets ထဲ ထည့်ပါ။")
-    voice_id = voice_id or VOICE_MAKER_VOICE_ID
+def _gemini_key(api_key):
+    return str(api_key or "").strip()
+
+
+def _speed_instruction(rate):
+    try:
+        rate_num = float(rate)
+    except (TypeError, ValueError):
+        rate_num = 1.0
+    if rate_num < 0.85:
+        return "Speak slowly and clearly."
+    if rate_num > 1.25:
+        return "Speak briskly but keep every Burmese word clear."
+    return "Speak at a natural, steady pace."
+
+
+def generate_google_tts(text, voice_id="Kore", rate=1.0, pitch=0, api_key=None, style=""):
+    key = _gemini_key(api_key)
+    style = style or PROFILE_STYLES.get((voice_id, int(pitch)), "Speak naturally and clearly in Burmese.")
+    if not key:
+        raise RuntimeError("Google AI Studio API key ထည့်ပါ။")
     chunks = split_tts_chunks(text)
-    output_file = Path("output.mp3")
-    sub_file = Path("output.srt")
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    output_file = Path("output.wav")
+    srt_file = Path("output.srt")
+    headers = {"Content-Type": "application/json"}
 
-    with tempfile.TemporaryDirectory(prefix="mgkhant_voicemaker_") as temp_dir:
-        temp_path = Path(temp_dir)
+    with tempfile.TemporaryDirectory(prefix="mgkhant_google_") as temp_dir:
         chunk_files = []
-        for index, chunk_text in enumerate(chunks):
-            payload = {
-                "Engine": VOICE_MAKER_ENGINE,
-                "VoiceId": voice_id,
-                "LanguageCode": VOICE_MAKER_LANGUAGE,
-                "Text": chunk_text,
-                "OutputFormat": "mp3",
-                "SampleRate": "48000",
-                "MasterVolume": "0",
-                "MasterSpeed": str(_speed_to_master_speed(rate)),
-                "MasterPitch": str(_pitch_to_master_pitch(pitch)),
+        for index, chunk in enumerate(chunks):
+            prompt = (
+                "Speak the following Burmese Myanmar text exactly as written. "
+                "Do not translate it, do not add words, and do not explain anything. "
+                f"{_speed_instruction(rate)} {style} Text: {chunk}"
+            ).strip()
+            body = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "responseModalities": ["AUDIO"],
+                    "speechConfig": {
+                        "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice_id}},
+                        "languageCode": "my-MM",
+                    },
+                },
             }
-            response = requests.post(VOICE_MAKER_TTS_URL, headers=headers, json=payload, timeout=180)
-            if not response.ok:
-                raise RuntimeError(f"VoiceMaker TTS error {response.status_code}: {response.text[:1000]}")
+            response = requests.post(f"{GOOGLE_TTS_URL}?key={key}", headers=headers, json=body, timeout=180)
+            if response.status_code >= 400:
+                detail = response.text[:1200]
+                if response.status_code == 429 or "quota" in detail.lower() or "exceeded" in detail.lower():
+                    raise RuntimeError(f"GOOGLE_QUOTA_EXCEEDED: Google AI Studio quota ပြည့်သွားပါပြီ။ {detail}")
+                raise RuntimeError(f"Google Gemini TTS error {response.status_code}: {detail}")
             try:
-                result = response.json()
+                payload = response.json()
             except ValueError as exc:
-                raise RuntimeError(f"VoiceMaker response JSON မဟုတ်ပါ: {response.text[:500]}") from exc
-            if not result.get("success", False):
-                raise RuntimeError(f"VoiceMaker TTS မအောင်မြင်ပါ: {json.dumps(result, ensure_ascii=False)[:1000]}")
-            chunk_file = temp_path / f"chunk_{index:04d}.mp3"
-            _download_audio(result.get("path"), chunk_file, api_key)
+                raise RuntimeError("Google AI Studio response JSON မဟုတ်ပါ။") from exc
+            inline = _extract_inline_audio(payload)
+            if not inline:
+                raise RuntimeError(f"Google AI Studio audio response မရပါ: {json.dumps(payload, ensure_ascii=False)[:1000]}")
+            try:
+                pcm = base64.b64decode(inline["data"])
+            except Exception as exc:
+                raise RuntimeError("Google AI Studio audio data ကို decode မလုပ်နိုင်ပါ။") from exc
+            chunk_file = Path(temp_dir) / f"chunk_{index:04d}.wav"
+            _pcm_to_wav(pcm, chunk_file)
             chunk_files.append(chunk_file)
-        _append_mp3_files(chunk_files, output_file)
+        _merge_wav_files(chunk_files, output_file)
 
     duration = get_audio_duration(output_file)
     if not duration or duration <= 0:
-        raise RuntimeError("VoiceMaker audio duration မရပါ။")
-    write_segmented_srt(text, sub_file, duration)
-    return output_file, sub_file
+        raise RuntimeError("Google audio duration မရပါ။")
+    write_segmented_srt(text, srt_file, duration)
+    return output_file, srt_file
 
 
-def run_tts_to_file(text, voice_id, pitch_offset, rate="+0%", suffix="output", api_key=None):
-    audio_path, sub_path = generate_voicemaker_tts(text, voice_id, rate=rate, pitch=pitch_offset)
-    final_audio = Path(f"output_{suffix}{audio_path.suffix}")
+def run_tts_to_file(text, voice_id, pitch_offset, rate=1.0, suffix="output", api_key=None, style=""):
+    audio, srt = generate_google_tts(text, voice_id=voice_id, rate=rate, pitch=pitch_offset, api_key=api_key, style=style)
+    final_audio = Path(f"output_{suffix}.wav")
     final_srt = Path(f"output_{suffix}.srt")
-    shutil.copyfile(audio_path, final_audio)
-    shutil.copyfile(sub_path, final_srt)
+    final_audio.write_bytes(audio.read_bytes())
+    final_srt.write_text(srt.read_text(encoding="utf-8"), encoding="utf-8")
     increment_usage()
     return final_audio, final_srt
 
@@ -287,13 +273,7 @@ def apply_effects(input_path, effect_name, tempo=1.0):
 
 
 __all__ = [
-    "FEATURED_VOICES",
-    "EFFECTS",
-    "get_voicemaker_voices",
-    "generate_voicemaker_tts",
-    "change_tempo",
-    "get_usage_count",
-    "run_tts_to_file",
+    "FEATURED_VOICES", "EFFECTS", "PROFILE_STYLES", "get_google_voices", "get_voicemaker_voices",
+    "generate_google_tts", "run_tts_to_file", "change_tempo", "get_usage_count",
     "apply_effects",
-    ]
-                                 
+]
