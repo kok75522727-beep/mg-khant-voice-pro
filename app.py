@@ -8,7 +8,7 @@ import re
 import requests
 
 from voice_engine import (
-    FEATURED_VOICES,
+    get_camb_voices,
     change_tempo, get_usage_count, run_tts_to_file
 )
 
@@ -358,10 +358,13 @@ def tts_page():
         )
         
         render_section("2", "အသံအမျိုးအစား ရွေးချယ်ခြင်း")
-        # Keep the visible UI names explicit so old cached voice labels cannot reappear.
-        voice_options = [
-            "စိုင်းစိုင်း",
-        ]
+        try:
+            camb_voices = get_camb_voices(limit=10)
+        except Exception as exc:
+            st.error(f"❌ CAMB.AI အသံစာရင်း မရပါ: {exc}")
+            st.info("Streamlit Secrets ထဲမှာ CAMB_API_KEY ထည့်ထားပြီး CAMB account ထဲမှာ မြန်မာအသံရှိ/မရှိ စစ်ပါ။")
+            return
+        voice_options = [voice[3] for voice in camb_voices]
         selected_voice_str = st.radio(
             "အသံရွေးပါ",
             options=voice_options,
@@ -370,7 +373,7 @@ def tts_page():
             label_visibility="collapsed"
         )
         selected_idx = voice_options.index(selected_voice_str)
-        voice_id, pitch_offset, name, label = FEATURED_VOICES[selected_idx]
+        voice_id, pitch_offset, name, label = camb_voices[selected_idx]
 
         col_speed, col_pitch = st.columns(2)
         with col_speed:
@@ -529,4 +532,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-        
+    
