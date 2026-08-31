@@ -17,8 +17,8 @@ CHUNK_SIZE = 2_400
 SAMPLE_RATE = 24_000
 SAMPLE_WIDTH = 2
 CHANNELS = 1
-TELEGRAM_GROUP = "@fruitworld23"
-TELEGRAM_GROUP_URL = "https://t.me/fruitworld23"
+TELEGRAM_GROUP = "@oneteam24"
+TELEGRAM_GROUP_URL = "https://t.me/oneteam24"
 
 # UI တွင် မြန်မာနာမည်ပဲ ပြပြီး Azure voice ID ကို နောက်ကွယ်မှာသာ သုံးသည်။
 VOICE_CARDS = [
